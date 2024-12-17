@@ -9,7 +9,7 @@ include_directories(${PROJECT_SOURCE_DIR}/headers)
 
 # Project structure
 set(SOURCE_FILES
-    src/main.cpp
+    "src/main.cpp"
  "src/Window.cpp")
 
 # Define the vendors directory path
