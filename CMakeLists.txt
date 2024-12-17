@@ -5,17 +5,19 @@ project(VulkanApp LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include_directories(${PROJECT_SOURCE_DIR}/headers)
+
 # Project structure
 set(SOURCE_FILES
     src/main.cpp
-)
+ "src/Window.cpp")
 
 # Define the vendors directory path
 set(VENDORS_DIR ${CMAKE_SOURCE_DIR}/vendors)
 
 # GLFW Setup (Pre-compiled binary)
 set(GLFW_INCLUDE_DIR ${VENDORS_DIR}/glfw/include)
-set(GLFW_LIB ${VENDORS_DIR}/glfw/lib/glfw3.lib) # Path to GLFW pre-compiled library
+set(GLFW_LIB ${VENDORS_DIR}/glfw/lib-vc2022/glfw3.lib) # Path to GLFW pre-compiled library
 
 # GLEW Setup (Pre-compiled binary)
 set(GLEW_INCLUDE_DIR ${VENDORS_DIR}/glew/include)
