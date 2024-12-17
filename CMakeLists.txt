@@ -10,7 +10,7 @@ include_directories(${PROJECT_SOURCE_DIR}/headers)
 # Project structure
 set(SOURCE_FILES
     "src/main.cpp"
- "src/Window.cpp")
+ "src/Window.cpp" "src/App.cpp")
 
 # Define the vendors directory path
 set(VENDORS_DIR ${CMAKE_SOURCE_DIR}/vendors)

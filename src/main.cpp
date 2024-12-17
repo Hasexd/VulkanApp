@@ -1,18 +1,10 @@
 #include <iostream>
 
-#include "Window.h"
+#include "App.h"
 
 int main()
 {
-	glfwInit();
-	Window window(1920, 1080, "VulkanApp");
+	App app;
 
-	glfwMakeContextCurrent(window.Get());
-
-	while (!glfwWindowShouldClose(window.Get())) {
-		glfwPollEvents();
-		glfwSwapBuffers(window.Get());
-		glfwSwapInterval(1);
-	}
-	glfwTerminate();
+	app.Run();
 }
