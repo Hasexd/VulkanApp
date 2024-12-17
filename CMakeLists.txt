@@ -13,18 +13,16 @@ set(SOURCE_FILES
 # Define the vendors directory path
 set(VENDORS_DIR ${CMAKE_SOURCE_DIR}/vendors)
 
-# GLFW Setup
-add_subdirectory(${VENDORS_DIR}/glfw glfw_build)
+# GLFW Setup (Pre-compiled binary)
+set(GLFW_INCLUDE_DIR ${VENDORS_DIR}/glfw/include)
+set(GLFW_LIB ${VENDORS_DIR}/glfw/lib/glfw3.lib) # Path to GLFW pre-compiled library
 
-# GLEW Setup
-add_library(glew STATIC
-    ${VENDORS_DIR}/glew/src/glew.c
-)
-target_include_directories(glew PUBLIC ${VENDORS_DIR}/glew/include)
+# GLEW Setup (Pre-compiled binary)
+set(GLEW_INCLUDE_DIR ${VENDORS_DIR}/glew/include)
+set(GLEW_LIB ${VENDORS_DIR}/glew/lib/Release/x64/glew32s.lib) # Adjust path to match your GLEW static lib
 
 # GLM Setup (Header-only library)
 set(GLM_INCLUDE_DIR ${VENDORS_DIR}/glm)
-include_directories(${GLM_INCLUDE_DIR})
 
 # Vulkan Setup
 if(WIN32)
@@ -39,29 +37,27 @@ elseif(UNIX)
     set(VULKAN_LIBRARY Vulkan::Vulkan)
 endif()
 
-# Include Vulkan headers
-include_directories(${VULKAN_INCLUDE_DIR})
-
-# Project executable
-add_executable(MyProject ${SOURCE_FILES})
-
-# Link libraries
-target_link_libraries(MyProject
-    glfw
-    glew
-    ${VULKAN_LIBRARY}
+# Include directories
+include_directories(
+    ${GLFW_INCLUDE_DIR}
+    ${GLEW_INCLUDE_DIR}
+    ${GLM_INCLUDE_DIR}
+    ${VULKAN_INCLUDE_DIR}
 )
 
-# Include directories for GLFW and GLEW
-target_include_directories(MyProject PRIVATE
-    ${VENDORS_DIR}/glfw/include
-    ${VENDORS_DIR}/glew/include
-    ${GLM_INCLUDE_DIR}
+# Project executable
+add_executable(VulkanApp ${SOURCE_FILES})
+
+# Link libraries
+target_link_libraries(VulkanApp
+    ${GLFW_LIB}
+    ${GLEW_LIB}
+    ${VULKAN_LIBRARY}
 )
 
 # OS-specific settings
 if(WIN32)
-    target_compile_definitions(MyProject PRIVATE GLEW_STATIC)
+    target_compile_definitions(VulkanApp PRIVATE GLEW_STATIC)
 elseif(UNIX)
-    target_link_libraries(MyProject dl pthread) # Required for Linux
+    target_link_libraries(VulkanApp dl pthread) # Required for Linux
 endif()
