@@ -7,7 +7,8 @@
 
 #include "Window.h"
 
-class App {
+class App 
+{
 public:
 	App();
 	~App();

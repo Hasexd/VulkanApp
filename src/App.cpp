@@ -9,6 +9,8 @@ App::App()
 		exit(-1);
 	}
 
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+
 	m_Window = Window(1080, 720, "VulkanApp");
 
 	glfwMakeContextCurrent(m_Window.Get());
