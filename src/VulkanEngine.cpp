@@ -685,4 +685,5 @@ void VulkanEngine::Cleanup()
 	vkb::destroy_device(m_Device);
 	vkb::destroy_surface(m_Instance, m_Surface);
 	vkb::destroy_instance(m_Instance);
+	vmaDestroyAllocator(m_Allocator);
 }
