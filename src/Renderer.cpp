@@ -394,28 +394,28 @@ void Renderer::CreateGraphicsPipeline()
 
 	std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
-	VkPipelineDynamicStateCreateInfo dynamic_info = {};
-	dynamic_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamic_info.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-	dynamic_info.pDynamicStates = dynamicStates.data();
+	VkPipelineDynamicStateCreateInfo dynamicInfo = {};
+	dynamicInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+	dynamicInfo.pDynamicStates = dynamicStates.data();
 
-	VkGraphicsPipelineCreateInfo pipeline_info = {};
-	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipeline_info.stageCount = 2;
-	pipeline_info.pStages = shaderStages;
-	pipeline_info.pVertexInputState = &vertexInputInfo;
-	pipeline_info.pInputAssemblyState = &inputAssembly;
-	pipeline_info.pViewportState = &viewportState;
-	pipeline_info.pRasterizationState = &rasterizer;
-	pipeline_info.pMultisampleState = &multisampling;
-	pipeline_info.pColorBlendState = &colorBlending;
-	pipeline_info.pDynamicState = &dynamic_info;
-	pipeline_info.layout = m_RenderData->PipelineLayout;
-	pipeline_info.renderPass = m_RenderData->RenderPass;
-	pipeline_info.subpass = 0;
-	pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
+	VkGraphicsPipelineCreateInfo pipelineInfo = {};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = &dynamicInfo;
+	pipelineInfo.layout = m_RenderData->PipelineLayout;
+	pipelineInfo.renderPass = m_RenderData->RenderPass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
-	if (m_DispatchTable.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &m_RenderData->GraphicsPipeline) != VK_SUCCESS) {
+	if (m_DispatchTable.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_RenderData->GraphicsPipeline) != VK_SUCCESS) {
 		std::cout << "Failed to create pipeline\n";
 		return;
 	}
