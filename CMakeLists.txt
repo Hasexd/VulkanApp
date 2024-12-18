@@ -5,7 +5,6 @@ project(VulkanApp LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include_directories(${PROJECT_SOURCE_DIR}/headers)
 
 # Project structure
 set(SOURCE_FILES
@@ -33,18 +32,25 @@ endif()
 # Include directories
 include_directories(
     ${VULKAN_INCLUDE_DIR}
+    ${PROJECT_SOURCE_DIR}/headers
 )
+
 
 # Project executable
 add_executable(VulkanApp ${SOURCE_FILES})
 
 add_subdirectory(vendors/vk-bootstrap)
+add_subdirectory(vendors/glfw)
 
 # Link libraries
 target_link_libraries(VulkanApp
     ${VULKAN_LIBRARY}
     vk-bootstrap::vk-bootstrap
+    glfw
 )
+
+target_include_directories(VulkanApp PUBLIC vendors/glm)
+
 
 # OS-specific settings
 if(WIN32)
