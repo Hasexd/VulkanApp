@@ -4,6 +4,8 @@ project(VulkanApp LANGUAGES CXX)
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(PROJECT_DIR ${CMAKE_SOURCE_DIR})
+set(SHADERS_DIR ${PROJECT_DIR}/shaders)
 
 
 # Project structure
@@ -50,6 +52,7 @@ target_link_libraries(VulkanApp
 )
 
 target_include_directories(VulkanApp PUBLIC vendors/glm)
+target_compile_definitions(VulkanApp PRIVATE SHADERS_DIR="${SHADERS_DIR}")
 
 
 # OS-specific settings

@@ -7,23 +7,41 @@
 #include <vulkan/vulkan_core.h>
 #include <GLFW/glfw3.h>
 #include <VkBootstrap.h>
-
-
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 
 struct RenderData;
 
 class Renderer
 {
 public:
-	Renderer(GLFWwindow* window);
+	Renderer();
+	~Renderer();
 
+
+	void DrawFrame();
+
+	void SetWindow(GLFWwindow* window);
+	void Init();
+	vkb::DispatchTable& GetDispatchTable();
 
 private:
 	void InitVulkan();
-
 	void InitDevice();
-	void CreateSurfaceGLFW(VkInstance instance, GLFWwindow* window, VkAllocationCallbacks* allocator = nullptr);
+	void CreateSwapchain();
+	void GetQueues();
+	void CreateRenderPass();
+	void CreateGraphicsPipeline();
+	void CreateFramebuffers();
+	void CreateCommandPool();
+	void CreateCommandBuffers();
+	void CreateSyncObjects();
+	void RecreateSwapchain();
+	void CreateSurfaceGLFW(VkAllocationCallbacks* allocator = nullptr);
 
+
+	void Cleanup();
 private:
 	vkb::Instance m_Instance;
 	vkb::InstanceDispatchTable m_InstanceDispatchTable;
@@ -34,6 +52,8 @@ private:
 
 	std::unique_ptr<RenderData> m_RenderData;
 	GLFWwindow* m_Window;
+
+	const int MAX_FRAMES_IN_FLIGHT = 2;
 };
 
 

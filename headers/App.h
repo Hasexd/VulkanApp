@@ -6,6 +6,7 @@
 #include <iostream>
 
 #include "Window.h"
+#include "Renderer.h"
 
 class App 
 {
@@ -16,4 +17,5 @@ public:
 
 private:
 	Window m_Window;
+	Renderer m_Renderer;
 };
