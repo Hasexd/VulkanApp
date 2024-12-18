@@ -25,10 +25,9 @@ void App::Run()
 	while(!glfwWindowShouldClose(m_Window.Get()))
 	{
 		glfwPollEvents();
-		m_Renderer.DrawFrame();
+		m_Renderer.Render();
 		glfwSwapBuffers(m_Window.Get());
 	}
-	m_Renderer.GetDispatchTable().deviceWaitIdle();
 }
 
 

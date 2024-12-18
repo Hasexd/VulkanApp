@@ -11,7 +11,7 @@ set(SHADERS_DIR ${PROJECT_DIR}/shaders)
 # Project structure
 set(SOURCE_FILES
     "src/main.cpp"
- "src/Window.cpp" "src/App.cpp" "src/Renderer.cpp")
+ "src/Window.cpp" "src/App.cpp" "src/Renderer.cpp" "src/VulkanEngine.cpp")
 
 # Define the vendors directory path
 set(VENDORS_DIR ${CMAKE_SOURCE_DIR}/vendors)
@@ -51,7 +51,8 @@ target_link_libraries(VulkanApp
     glfw
 )
 
-target_include_directories(VulkanApp PUBLIC vendors/glm)
+
+target_include_directories(VulkanApp PUBLIC vendors/glm ${VENDORS_DIR}/VulkanMemoryAllocator/include)
 target_compile_definitions(VulkanApp PRIVATE SHADERS_DIR="${SHADERS_DIR}")
 
 
