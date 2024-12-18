@@ -15,12 +15,6 @@ set(SOURCE_FILES
 # Define the vendors directory path
 set(VENDORS_DIR ${CMAKE_SOURCE_DIR}/vendors)
 
-# GLFW Setup (Pre-compiled binary)
-set(GLFW_INCLUDE_DIR ${VENDORS_DIR}/glfw/include)
-set(GLFW_LIB ${VENDORS_DIR}/glfw/lib-vc2022/glfw3.lib) # Path to GLFW pre-compiled library
-
-# GLM Setup (Header-only library)
-set(GLM_INCLUDE_DIR ${VENDORS_DIR}/glm)
 
 
 # Vulkan Setup
@@ -38,8 +32,6 @@ endif()
 
 # Include directories
 include_directories(
-    ${GLFW_INCLUDE_DIR}
-    ${GLM_INCLUDE_DIR}
     ${VULKAN_INCLUDE_DIR}
 )
 
@@ -50,7 +42,6 @@ add_subdirectory(vendors/vk-bootstrap)
 
 # Link libraries
 target_link_libraries(VulkanApp
-    ${GLFW_LIB}
     ${VULKAN_LIBRARY}
     vk-bootstrap::vk-bootstrap
 )
