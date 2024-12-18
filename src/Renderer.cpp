@@ -416,7 +416,7 @@ void Renderer::CreateGraphicsPipeline()
 	pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
 
 	if (m_DispatchTable.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &m_RenderData->GraphicsPipeline) != VK_SUCCESS) {
-		std::cout << "failed to create pipline\n";
+		std::cout << "Failed to create pipeline\n";
 		return;
 	}
 	m_DispatchTable.destroyShaderModule(fragModule, nullptr);

@@ -11,7 +11,7 @@
 #include <fstream>
 #include <iostream>
 
-struct RenderData;
+#include "RenderData.h"
 
 class Renderer
 {
@@ -45,39 +45,16 @@ private:
 private:
 	vkb::Instance m_Instance;
 	vkb::InstanceDispatchTable m_InstanceDispatchTable;
-	VkSurfaceKHR m_Surface;
+	VkSurfaceKHR m_Surface = nullptr;
 	vkb::Device m_Device;
 	vkb::DispatchTable m_DispatchTable;
 	vkb::Swapchain m_Swapchain;
 
 	std::unique_ptr<RenderData> m_RenderData;
-	GLFWwindow* m_Window;
+	GLFWwindow* m_Window = nullptr;
 
 	const int MAX_FRAMES_IN_FLIGHT = 2;
 };
 
 
 
-struct RenderData
-{
-	VkQueue GraphicsQueue;
-	VkQueue PresentQueue;
-
-	std::vector<VkImage> SwapchainImages;
-	std::vector<VkImageView> SwapchainImageViews;
-	std::vector<VkFramebuffer> Framebuffers;
-
-	VkRenderPass RenderPass;
-	VkPipelineLayout PipelineLayout;
-	VkPipeline GraphicsPipeline;
-
-	VkCommandPool CommandPool;
-	std::vector<VkCommandBuffer> CommandBuffers;
-
-	std::vector<VkSemaphore> AvailableSemaphores;
-	std::vector<VkSemaphore> FinishedSemaphore;
-	std::vector<VkFence> InFlightFences;
-	std::vector<VkFence> ImageInFlight;
-
-	size_t CurrentFrame = 0;
-};
