@@ -20,6 +20,8 @@ public:
 	void SetWidth(uint32_t width);
 	void SetHeight(uint32_t height);
 
+	void Cleanup();
+
 private:
 	uint32_t m_Width, m_Height;
 	std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> m_Window;

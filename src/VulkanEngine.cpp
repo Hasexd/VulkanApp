@@ -40,8 +40,9 @@ static VkShaderModule CreateShaderModule(VulkanEngine* VulkanEngine, const std::
 	return shaderModule;
 }
 
+
 VulkanEngine::VulkanEngine() :
-	m_RenderData(std::make_unique<RenderData>()) 
+	m_RenderData(std::make_unique<RenderData>())
 {
 
 }
@@ -395,8 +396,10 @@ void VulkanEngine::CreateGraphicsPipeline()
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
 	vertexInputInfo.vertexBindingDescriptionCount = vertexDescription.bindings.size();
 	vertexInputInfo.pVertexBindingDescriptions = vertexDescription.bindings.data();
+
 	vertexInputInfo.vertexAttributeDescriptionCount = vertexDescription.attributes.size();
 	vertexInputInfo.pVertexAttributeDescriptions = vertexDescription.attributes.data();
 
@@ -663,27 +666,33 @@ void VulkanEngine::SetWindow(GLFWwindow* window)
 
 void VulkanEngine::Cleanup()
 {
+
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		m_DispatchTable.destroySemaphore(m_RenderData->FinishedSemaphore[i], nullptr);
-		m_DispatchTable.destroySemaphore(m_RenderData->AvailableSemaphores[i], nullptr);
-		m_DispatchTable.destroyFence(m_RenderData->InFlightFences[i], nullptr);
+		m_DispatchTable.destroySemaphore(m_RenderData->FinishedSemaphore[i], m_Allocator->GetAllocationCallbacks());
+		m_DispatchTable.destroySemaphore(m_RenderData->AvailableSemaphores[i], m_Allocator->GetAllocationCallbacks());
+		m_DispatchTable.destroyFence(m_RenderData->InFlightFences[i], m_Allocator->GetAllocationCallbacks());
 	}
 
-	m_DispatchTable.destroyCommandPool(m_RenderData->CommandPool, nullptr);
+	m_DispatchTable.destroyCommandPool(m_RenderData->CommandPool, m_Allocator->GetAllocationCallbacks());
 
 	for (auto framebuffer : m_RenderData->Framebuffers) {
-		m_DispatchTable.destroyFramebuffer(framebuffer, nullptr);
+		m_DispatchTable.destroyFramebuffer(framebuffer, m_Allocator->GetAllocationCallbacks());
 	}
 
-	m_DispatchTable.destroyPipeline(m_RenderData->GraphicsPipeline, nullptr);
-	m_DispatchTable.destroyPipelineLayout(m_RenderData->PipelineLayout, nullptr);
-	m_DispatchTable.destroyRenderPass(m_RenderData->RenderPass, nullptr);
+	m_DispatchTable.destroyPipeline(m_RenderData->GraphicsPipeline, m_Allocator->GetAllocationCallbacks());
+	m_DispatchTable.destroyPipelineLayout(m_RenderData->PipelineLayout, m_Allocator->GetAllocationCallbacks());
+	m_DispatchTable.destroyRenderPass(m_RenderData->RenderPass, m_Allocator->GetAllocationCallbacks());
 
 	m_Swapchain.destroy_image_views(m_RenderData->SwapchainImageViews);
 
+	vmaDestroyBuffer(m_Allocator, m_TriangleMesh.VertexBuffer.Buffer, m_TriangleMesh.VertexBuffer.Allocation);
+
 	vkb::destroy_swapchain(m_Swapchain);
+
+	vmaDestroyAllocator(m_Allocator);
 	vkb::destroy_device(m_Device);
 	vkb::destroy_surface(m_Instance, m_Surface);
 	vkb::destroy_instance(m_Instance);
-	vmaDestroyAllocator(m_Allocator);
+
+
 }

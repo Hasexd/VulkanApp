@@ -12,9 +12,9 @@
 #include <VkBootstrap.h>
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
-
 #include <vk_mem_alloc.h>
 
+#include "Window.h"
 #include "RenderData.h"
 #include "Mesh.h"
 
@@ -29,7 +29,6 @@ public:
 	void SetWindow(GLFWwindow* window);
 	void Init();
 	vkb::DispatchTable& GetDispatchTable();
-
 private:
 	void InitVulkan();
 	void InitDevice();
@@ -56,7 +55,7 @@ private:
 	VmaAllocator m_Allocator;
 
 	std::unique_ptr<RenderData> m_RenderData;
-	GLFWwindow* m_Window = nullptr;
+	GLFWwindow* m_Window;
 
 	Mesh m_TriangleMesh;
 

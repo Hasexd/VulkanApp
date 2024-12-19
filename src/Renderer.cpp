@@ -1,6 +1,5 @@
 #include "Renderer.h"
 
-Renderer::Renderer() {}
 
 void Renderer::Init()
 {
@@ -9,6 +8,7 @@ void Renderer::Init()
 
 void Renderer::SetWindow(GLFWwindow* window)
 {
+	m_Window = window;
 	m_Engine.SetWindow(window);
 }
 
@@ -16,4 +16,9 @@ void Renderer::SetWindow(GLFWwindow* window)
 void Renderer::Render()
 {
 	m_Engine.DrawFrame();
+}
+
+void Renderer::DeviceWaitIdle()
+{
+	m_Engine.GetDispatchTable().deviceWaitIdle();
 }

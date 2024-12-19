@@ -28,10 +28,6 @@ void App::Run()
 		m_Renderer.Render();
 		glfwSwapBuffers(m_Window.Get());
 	}
-}
-
-
-App::~App()
-{
+	m_Renderer.DeviceWaitIdle();
 	glfwTerminate();
 }

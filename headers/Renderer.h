@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 
 #include <GLFW/glfw3.h>
 
@@ -9,12 +10,15 @@
 class Renderer
 {
 public:
-	Renderer();
+	Renderer() = default;
+	~Renderer() = default;
 	void Render();
 
 	void SetWindow(GLFWwindow* window);
 	void Init();
+	void DeviceWaitIdle();
 private:
+	GLFWwindow* m_Window;
 	VulkanEngine m_Engine;
 };
 
