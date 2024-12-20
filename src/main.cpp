@@ -1,14 +1,7 @@
-#include <iostream>
-
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
-#include <vulkan/vulkan.h>
-#include <VkBootstrap.h>
-#include <vk_mem_alloc.h>
+#include "Application.h"
 
 int main()
 {
-	std::cout << "Hello world!";
-	std::cin.get();
+	Application app(1080, 720, "Vulkan App", true);
+	app.Run();
 }

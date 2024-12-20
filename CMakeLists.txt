@@ -31,11 +31,11 @@ include_directories(vendors/VulkanMemoryAllocator/include)
 find_package(Vulkan REQUIRED)
 
 # Add source files
-file(GLOB_RECURSE SOURCES
-    ${CMAKE_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_SOURCE_DIR}/src/*.h
+set(SOURCES
+    src/main.cpp
+    src/Application.cpp
+    src/VulkanEngine.cpp
 )
-
 # Add executable
 add_executable(VulkanApp ${SOURCES})
 
@@ -73,3 +73,4 @@ set_target_properties(VulkanApp PROPERTIES
 message(STATUS "VulkanApp Configuration:")
 message(STATUS "  Vulkan SDK Path: $ENV{VULKAN_SDK}")
 message(STATUS "  Source Files: ${SOURCES}")
+
