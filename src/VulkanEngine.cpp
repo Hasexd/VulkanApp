@@ -1,45 +1,13 @@
 #include "VulkanEngine.h"
 
+#define VMA_IMPLEMENTATION
+#include <vk_mem_alloc.h>
 
-static void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout)
-{
-	VkImageMemoryBarrier2 imageBarrier{};
-	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	imageBarrier.pNext = nullptr;
-
-	imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-	imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
-	imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-	imageBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
-
-	imageBarrier.oldLayout = currentLayout;
-	imageBarrier.newLayout = newLayout;
-
-	VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-
-	VkImageSubresourceRange subImage{};
-	subImage.aspectMask = aspectMask;
-	subImage.baseMipLevel = 0;
-	subImage.levelCount = VK_REMAINING_MIP_LEVELS;
-	subImage.baseArrayLayer = 0;
-	subImage.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-	imageBarrier.subresourceRange = subImage;
-	imageBarrier.image = image;
-
-	VkDependencyInfo depInfo{};
-	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	depInfo.pNext = nullptr;
-
-	depInfo.imageMemoryBarrierCount = 1;
-	depInfo.pImageMemoryBarriers = &imageBarrier;
-
-	vkCmdPipelineBarrier2(cmd, &depInfo);
-}
 
 void VulkanEngine::DrawFrame()
 {
 	vkWaitForFences(m_Device, 1, &GetCurrentFrame().RenderFence, true, 1000000000);
+	GetCurrentFrame().DeletionQueue.Flush();
 	vkResetFences(m_Device, 1, &GetCurrentFrame().RenderFence);
 
 	uint32_t swapchainImageIndex;
@@ -56,22 +24,15 @@ void VulkanEngine::DrawFrame()
 	cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 	vkBeginCommandBuffer(cmd, &cmdBeginInfo);
-	TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-	VkClearColorValue clearValue{};
-	float flash = std::abs(std::sin(m_FrameNumber / 120.f));
-	clearValue = { {0.f, 0.f, flash, 0.f} };
+	DrawBackground(cmd);
 
-	VkImageSubresourceRange clearRange{};
-	clearRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	clearRange.baseMipLevel = 0;
-	clearRange.levelCount = VK_REMAINING_MIP_LEVELS;
-	clearRange.baseArrayLayer = 0;
-	clearRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	Image::CopyImageToImage(cmd, m_DrawImage.Image, m_SwapchainImages[swapchainImageIndex], m_DrawExtent, m_SwapchainExtent);
+	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-	vkCmdClearColorImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
-
-	TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	vkEndCommandBuffer(cmd);
 
@@ -118,7 +79,7 @@ void VulkanEngine::DrawFrame()
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.pNext = nullptr;
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &waitSubmitInfo.semaphore;
+	presentInfo.pWaitSemaphores = &GetCurrentFrame().RenderSemaphore;
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &m_Swapchain;
 	presentInfo.pImageIndices = &swapchainImageIndex;
@@ -127,6 +88,22 @@ void VulkanEngine::DrawFrame()
 	vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
 
 	m_FrameNumber++;
+}
+
+void VulkanEngine::DrawBackground(const VkCommandBuffer& cmd)
+{
+	VkClearColorValue clearValue;
+	float flash = std::abs(std::sin(m_FrameNumber / 120.f));
+	clearValue = { {0.f, 0.f, flash, 0.f} };
+
+	VkImageSubresourceRange clearRange{};
+	clearRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	clearRange.baseMipLevel = 0;
+	clearRange.levelCount = VK_REMAINING_MIP_LEVELS;
+	clearRange.baseArrayLayer = 0;
+	clearRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+	vkCmdClearColorImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
+
 }
 
 
@@ -193,7 +170,7 @@ void VulkanEngine::InitSwapchain()
 	if (m_Window)
 	{
 		int width, height;
-		glfwGetFramebufferSize(m_Window, &width, &height);
+		glfwGetWindowSize(m_Window, &width, &height);
 		CreateSwapchain(width, height);
 	}
 	else
@@ -250,6 +227,20 @@ void VulkanEngine::InitDevices()
 	m_PhysicalDevice = physicalDevice.physical_device;
 
 	m_GraphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
+
+	VmaAllocatorCreateInfo allocatorCreateInfo{};
+	allocatorCreateInfo.physicalDevice = m_PhysicalDevice;
+	allocatorCreateInfo.device = m_Device;
+	allocatorCreateInfo.instance = m_Instance;
+	allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+	
+	vmaCreateAllocator(&allocatorCreateInfo, &m_Allocator);
+
+	m_MainDeletionQueue.PushFunction([&]() -> void
+		{
+			vmaDestroyAllocator(m_Allocator);
+		});
+
 }
 
 
@@ -274,6 +265,64 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	m_Swapchain = vkbSwapchain.swapchain;
 	m_SwapchainImages = vkbSwapchain.get_images().value();
 	m_SwapchainImageViews = vkbSwapchain.get_image_views().value();
+
+
+	VkExtent3D drawImageExtent{};
+	drawImageExtent.width = width;
+	drawImageExtent.height = height;
+	drawImageExtent.depth = 1;
+
+	m_DrawImage.ImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	m_DrawImage.ImageExtent = drawImageExtent;
+	m_DrawExtent = { drawImageExtent.width, drawImageExtent.height };
+
+	VkImageUsageFlags drawImageUsageFlags{};
+	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	drawImageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
+	drawImageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	VkImageCreateInfo imageCreateInfo{};
+
+	imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageCreateInfo.pNext = nullptr;
+	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageCreateInfo.format = m_DrawImage.ImageFormat;
+	imageCreateInfo.extent = m_DrawImage.ImageExtent;
+	imageCreateInfo.mipLevels = 1;
+	imageCreateInfo.arrayLayers = 1;
+	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+	//change to linear for cpu 
+	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+
+	imageCreateInfo.usage = drawImageUsageFlags;
+
+	VmaAllocationCreateInfo imageAllocInfo{};
+	imageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	imageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	vmaCreateImage(m_Allocator, &imageCreateInfo, &imageAllocInfo, &m_DrawImage.Image, &m_DrawImage.Allocation, nullptr);
+
+	VkImageViewCreateInfo imageViewInfo{};
+	imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	imageViewInfo.pNext = nullptr;
+	imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	imageViewInfo.image = m_DrawImage.Image;
+	imageViewInfo.format = m_DrawImage.ImageFormat;
+	imageViewInfo.subresourceRange.baseMipLevel = 0;
+	imageViewInfo.subresourceRange.levelCount = 1;
+	imageViewInfo.subresourceRange.baseArrayLayer = 0;
+	imageViewInfo.subresourceRange.layerCount = 1;
+	imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
+
+	m_MainDeletionQueue.PushFunction([=]() -> void
+		{
+			vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
+			vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
+		});
 }
 
 
@@ -289,7 +338,10 @@ void VulkanEngine::Cleanup()
 			vkDestroyFence(m_Device, m_Frames[i].RenderFence, nullptr);
 			vkDestroySemaphore(m_Device, m_Frames[i].RenderSemaphore, nullptr);
 			vkDestroySemaphore(m_Device, m_Frames[i].SwapchainSemaphore, nullptr);
+
+			m_Frames[i].DeletionQueue.Flush();
 		}
+		m_MainDeletionQueue.Flush();
 		DestroySwapchain();
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
 		vkDestroyDevice(m_Device, nullptr);

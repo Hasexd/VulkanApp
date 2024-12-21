@@ -20,6 +20,14 @@ if (WIN32 AND NOT DEFINED ENV{VULKAN_SDK})
     message(FATAL_ERROR "VULKAN_SDK environment variable not set.")
 endif()
 
+# Visual Studio-specific settings
+if (MSVC)
+    # Set the solution directory structure for Visual Studio
+    set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/Debug/bin")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/Release/bin")
+endif()
+
 # Add submodules
 add_subdirectory(vendors/glfw)
 add_subdirectory(vendors/vk-bootstrap)
@@ -36,11 +44,11 @@ set(SOURCES
     src/Application.cpp
     src/VulkanEngine.cpp
 )
+
 # Add executable
 add_executable(VulkanApp ${SOURCES})
 
 # Link libraries
-# Vulkan, GLFW, vk-bootstrap, GLM (header-only, no linking required)
 target_link_libraries(VulkanApp
     Vulkan::Vulkan
     glfw
@@ -48,7 +56,6 @@ target_link_libraries(VulkanApp
 )
 
 # Include directories
-# GLFW and GLM are header-only; VulkanMemoryAllocator is included above
 target_include_directories(VulkanApp PRIVATE
     vendors/glm
 )
@@ -69,8 +76,10 @@ set_target_properties(VulkanApp PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
 
+# Group sources for Visual Studio
+source_group("Source Files" FILES ${SOURCES})
+
 # Print summary
 message(STATUS "VulkanApp Configuration:")
 message(STATUS "  Vulkan SDK Path: $ENV{VULKAN_SDK}")
 message(STATUS "  Source Files: ${SOURCES}")
-

@@ -5,18 +5,12 @@
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <vk_mem_alloc.h>
 
 #include "VkBootstrap.h"
+#include "Types.h"
+#include "Image.h"
 
-struct FrameData
-{
-	VkCommandPool CommandPool;
-	VkCommandBuffer MainCommandBuffer;
-
-	VkSemaphore SwapchainSemaphore;
-	VkSemaphore RenderSemaphore;
-	VkFence RenderFence;
-};
 
 class VulkanEngine
 {
@@ -36,6 +30,7 @@ private:
 	void InitSwapchain();
 	void InitCommands();
 	void InitSyncStructures();
+	void DrawBackground(const VkCommandBuffer& cmd);
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
 
@@ -60,7 +55,13 @@ private:
 	VkQueue m_GraphicsQueue;
 	uint32_t m_GraphicsQueueFamily = 0;
 
+	VmaAllocator m_Allocator;
+
+	AllocatedImage m_DrawImage;
+	VkExtent2D m_DrawExtent;
+
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 	GLFWwindow* m_Window;
 
+	DeletionQueue m_MainDeletionQueue;
 };
