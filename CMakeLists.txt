@@ -31,6 +31,8 @@ endif()
 # Add submodules
 add_subdirectory(vendors/glfw)
 add_subdirectory(vendors/vk-bootstrap)
+add_subdirectory(vendors/glm)
+add_subdirectory(vendors/VulkanMemoryAllocator)
 
 # Include directories
 include_directories(vendors/VulkanMemoryAllocator/include vendors/glm)
