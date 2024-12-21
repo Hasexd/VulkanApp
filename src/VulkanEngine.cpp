@@ -252,6 +252,11 @@ void VulkanEngine::InitDevices()
 			vmaDestroyAllocator(m_Allocator);
 		});
 
+	m_MainDeletionQueue.PushFunction([&]() -> void
+		{
+			vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
+			vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
+		});
 }
 
 
@@ -283,7 +288,6 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 		vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
 		vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
 	}
-
 
 	VkExtent3D drawImageExtent{};
 	drawImageExtent.width = width;
@@ -336,16 +340,6 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
 	vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
-
-
-	if (!m_ResizeRequested)
-	{
-		m_MainDeletionQueue.PushFunction([&]() -> void
-			{
-				vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
-				vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
-			});
-	}
 }
 
 
