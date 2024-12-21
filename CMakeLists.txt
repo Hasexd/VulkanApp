@@ -43,6 +43,8 @@ set(SOURCES
     src/main.cpp
     src/Application.cpp
     src/VulkanEngine.cpp
+    src/Image.cpp
+    src/Descriptors.cpp
 )
 
 # Add executable
