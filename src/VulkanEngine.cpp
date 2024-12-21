@@ -278,63 +278,68 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	m_SwapchainImageViews = vkbSwapchain.get_image_views().value();
 
 
+	if (m_ResizeRequested)
+	{
+		vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
+		vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
+	}
+
+
+	VkExtent3D drawImageExtent{};
+	drawImageExtent.width = width;
+	drawImageExtent.height = height;
+	drawImageExtent.depth = 1;
+
+	m_DrawImage.ImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	m_DrawImage.ImageExtent = drawImageExtent;
+	m_DrawExtent = { drawImageExtent.width, drawImageExtent.height };
+
+	VkImageUsageFlags drawImageUsageFlags{};
+	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	drawImageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
+	drawImageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	VkImageCreateInfo imageCreateInfo{};
+
+	imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageCreateInfo.pNext = nullptr;
+	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageCreateInfo.format = m_DrawImage.ImageFormat;
+	imageCreateInfo.extent = m_DrawImage.ImageExtent;
+	imageCreateInfo.mipLevels = 1;
+	imageCreateInfo.arrayLayers = 1;
+	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+	//change to linear for cpu 
+	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+
+	imageCreateInfo.usage = drawImageUsageFlags;
+
+	VmaAllocationCreateInfo imageAllocInfo{};
+	imageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	imageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+
+	vmaCreateImage(m_Allocator, &imageCreateInfo, &imageAllocInfo, &m_DrawImage.Image, &m_DrawImage.Allocation, nullptr);
+
+	VkImageViewCreateInfo imageViewInfo{};
+	imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	imageViewInfo.pNext = nullptr;
+	imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	imageViewInfo.image = m_DrawImage.Image;
+	imageViewInfo.format = m_DrawImage.ImageFormat;
+	imageViewInfo.subresourceRange.baseMipLevel = 0;
+	imageViewInfo.subresourceRange.levelCount = 1;
+	imageViewInfo.subresourceRange.baseArrayLayer = 0;
+	imageViewInfo.subresourceRange.layerCount = 1;
+	imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
+
+
 	if (!m_ResizeRequested)
 	{
-		VkExtent3D drawImageExtent{};
-		drawImageExtent.width = width;
-		drawImageExtent.height = height;
-		drawImageExtent.depth = 1;
-
-		m_DrawImage.ImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-		m_DrawImage.ImageExtent = drawImageExtent;
-		m_DrawExtent = { drawImageExtent.width, drawImageExtent.height };
-
-		VkImageUsageFlags drawImageUsageFlags{};
-		drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-		drawImageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
-		drawImageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-		VkImageCreateInfo imageCreateInfo{};
-
-		imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageCreateInfo.pNext = nullptr;
-		imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageCreateInfo.format = m_DrawImage.ImageFormat;
-		imageCreateInfo.extent = m_DrawImage.ImageExtent;
-		imageCreateInfo.mipLevels = 1;
-		imageCreateInfo.arrayLayers = 1;
-		imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-		//change to linear for cpu 
-		imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-
-		imageCreateInfo.usage = drawImageUsageFlags;
-
-		VmaAllocationCreateInfo imageAllocInfo{};
-		imageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-		imageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-
-		vmaCreateImage(m_Allocator, &imageCreateInfo, &imageAllocInfo, &m_DrawImage.Image, &m_DrawImage.Allocation, nullptr);
-
-		VkImageViewCreateInfo imageViewInfo{};
-		imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		imageViewInfo.pNext = nullptr;
-		imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		imageViewInfo.image = m_DrawImage.Image;
-		imageViewInfo.format = m_DrawImage.ImageFormat;
-		imageViewInfo.subresourceRange.baseMipLevel = 0;
-		imageViewInfo.subresourceRange.levelCount = 1;
-		imageViewInfo.subresourceRange.baseArrayLayer = 0;
-		imageViewInfo.subresourceRange.layerCount = 1;
-		imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-
-
-
-		vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
-
-
 		m_MainDeletionQueue.PushFunction([&]() -> void
 			{
 				vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
