@@ -27,7 +27,5 @@ struct DescriptorAllocator
 
 	VkDescriptorSet Allocate(VkDevice device, VkDescriptorSetLayout layout);
 
-	
-
 	VkDescriptorPool Pool;
 };

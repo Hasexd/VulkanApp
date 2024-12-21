@@ -2,6 +2,8 @@
 
 #include <vector>
 #include <cmath>
+#include <filesystem>
+#include <functional>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -10,7 +12,8 @@
 #include "VkBootstrap.h"
 #include "Types.h"
 #include "Image.h"
-
+#include "Descriptors.h"
+#include "Pipelines.h"
 
 class VulkanEngine
 {
@@ -21,6 +24,7 @@ public:
 	void Init();
 	void DrawFrame();
 	void OnWindowResize();
+	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
 	void Cleanup();
 public:
@@ -31,6 +35,8 @@ private:
 	void InitSwapchain();
 	void InitCommands();
 	void InitSyncStructures();
+	void InitDescriptors();
+	void InitPipelines();
 	void DrawBackground(const VkCommandBuffer& cmd);
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
@@ -60,6 +66,18 @@ private:
 
 	AllocatedImage m_DrawImage;
 	VkExtent2D m_DrawExtent;
+
+	DescriptorAllocator m_GlobalDescriptorAllocator;
+	
+	VkDescriptorSet m_DrawImageDescriptors;
+	VkDescriptorSetLayout m_DrawImageDescriptorLayout;
+
+	VkPipeline m_GradientPipeline;
+	VkPipelineLayout m_GradientPipelineLayout;
+
+	VkFence m_ImmediateFence;
+	VkCommandBuffer m_ImmediateCommandBuffer;
+	VkCommandPool m_ImmediateCommandPool;
 
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 	GLFWwindow* m_Window;

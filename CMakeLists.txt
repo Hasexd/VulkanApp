@@ -41,12 +41,8 @@ include_directories(vendors/VulkanMemoryAllocator/include vendors/glm)
 find_package(Vulkan REQUIRED)
 
 # Add source files
-set(SOURCES
-    src/main.cpp
-    src/Application.cpp
-    src/VulkanEngine.cpp
-    src/Image.cpp
-    src/Descriptors.cpp
+file(GLOB SOURCES
+    src/*.cpp
 )
 
 # Add executable

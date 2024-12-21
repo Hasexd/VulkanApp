@@ -103,17 +103,9 @@ void VulkanEngine::DrawFrame()
 
 void VulkanEngine::DrawBackground(const VkCommandBuffer& cmd)
 {
-	VkClearColorValue clearValue;
-	float flash = std::abs(std::sin(m_FrameNumber / 120.f));
-	clearValue = { {0.f, 0.f, flash, 0.f} };
-
-	VkImageSubresourceRange clearRange{};
-	clearRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	clearRange.baseMipLevel = 0;
-	clearRange.levelCount = VK_REMAINING_MIP_LEVELS;
-	clearRange.baseArrayLayer = 0;
-	clearRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-	vkCmdClearColorImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
+	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.f), std::ceil(m_DrawExtent.height / 16.f), 1);
 
 }
 
@@ -130,6 +122,95 @@ void VulkanEngine::InitVulkan()
 	InitSwapchain();
 	InitCommands();
 	InitSyncStructures();
+	InitDescriptors();
+	InitPipelines();
+}
+
+void VulkanEngine::InitPipelines()
+{
+	VkPipelineLayoutCreateInfo computeLayoutInfo{};
+	computeLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	computeLayoutInfo.pNext = nullptr;
+	computeLayoutInfo.pSetLayouts = &m_DrawImageDescriptorLayout;
+	computeLayoutInfo.setLayoutCount = 1;
+
+	vkCreatePipelineLayout(m_Device, &computeLayoutInfo, nullptr, &m_GradientPipelineLayout);
+
+	VkShaderModule computeDrawShader;
+
+	std::filesystem::path path = "../../shaders/gradient.spv";
+	if (!Pipelines::LoadShaderModule(path.string().c_str(), m_Device, &computeDrawShader))
+	{
+		printf("Error when building a shader module!");
+		return;
+	}
+
+	VkPipelineShaderStageCreateInfo stageInfo{};
+	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.pNext = nullptr;
+	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.module = computeDrawShader;
+	stageInfo.pName = "main";
+
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = m_GradientPipelineLayout;
+	computePipelineCreateInfo.stage = stageInfo;
+
+	vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &m_GradientPipeline);
+	vkDestroyShaderModule(m_Device, computeDrawShader, nullptr);
+
+	if (!m_ResizeRequested)
+	{
+		m_MainDeletionQueue.PushFunction([&]() -> void
+			{
+				vkDestroyPipelineLayout(m_Device, m_GradientPipelineLayout, nullptr);
+				vkDestroyPipeline(m_Device, m_GradientPipeline, nullptr);
+			});
+	}
+}
+
+void VulkanEngine::InitDescriptors()
+{
+	std::vector<DescriptorAllocator::PoolSizeRatio> sizes =
+	{
+		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}
+	};
+
+	m_GlobalDescriptorAllocator.InitPool(m_Device, 10, sizes);
+
+	{
+		DescriptorLayoutBuilder builder;
+		builder.AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		m_DrawImageDescriptorLayout = builder.Build(m_Device, VK_SHADER_STAGE_COMPUTE_BIT);
+	}
+
+	m_DrawImageDescriptors = m_GlobalDescriptorAllocator.Allocate(m_Device, m_DrawImageDescriptorLayout);
+
+	VkDescriptorImageInfo imgInfo{};
+	imgInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	imgInfo.imageView = m_DrawImage.ImageView;
+
+	VkWriteDescriptorSet drawImageWrite{};
+	drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	drawImageWrite.pNext = nullptr;
+	drawImageWrite.dstBinding = 0;
+	drawImageWrite.dstSet = m_DrawImageDescriptors;
+	drawImageWrite.descriptorCount = 1;
+	drawImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	drawImageWrite.pImageInfo = &imgInfo;
+
+	vkUpdateDescriptorSets(m_Device, 1, &drawImageWrite, 0, nullptr);
+
+	if (!m_ResizeRequested)
+	{
+		m_MainDeletionQueue.PushFunction([&]() -> void
+			{
+				m_GlobalDescriptorAllocator.DestroyPool(m_Device);
+				vkDestroyDescriptorSetLayout(m_Device, m_DrawImageDescriptorLayout, nullptr);
+			});
+	}
 }
 
 void VulkanEngine::InitSyncStructures()
@@ -151,6 +232,12 @@ void VulkanEngine::InitSyncStructures()
 		vkCreateSemaphore(m_Device, &semaphoreCreateInfo, nullptr, &m_Frames[i].RenderSemaphore);
 	}
 
+	vkCreateFence(m_Device, &fenceCreateInfo, nullptr, &m_ImmediateFence);
+
+	m_MainDeletionQueue.PushFunction([&]() -> void 
+		{
+			vkDestroyFence(m_Device, m_ImmediateFence, nullptr);
+		});
 }
 
 void VulkanEngine::InitCommands()
@@ -174,6 +261,22 @@ void VulkanEngine::InitCommands()
 
 		vkAllocateCommandBuffers(m_Device, &cmdAllocInfo, &m_Frames[i].MainCommandBuffer);
 	}
+
+	vkCreateCommandPool(m_Device, &commandPoolInfo, nullptr, &m_ImmediateCommandPool);
+
+	VkCommandBufferAllocateInfo cmdAllocInfo{};
+	cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmdAllocInfo.pNext = nullptr;
+	cmdAllocInfo.commandPool = m_ImmediateCommandPool;
+	cmdAllocInfo.commandBufferCount = 1;
+	cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+	vkAllocateCommandBuffers(m_Device, &cmdAllocInfo, &m_ImmediateCommandBuffer);
+
+	m_MainDeletionQueue.PushFunction([&]() -> void
+	{
+		vkDestroyCommandPool(m_Device, m_ImmediateCommandPool, nullptr);
+	});
 }
 
 void VulkanEngine::InitSwapchain()
@@ -340,6 +443,45 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
 	vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
+}
+
+void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
+{
+	vkResetFences(m_Device, 1, &m_ImmediateFence);
+	vkResetCommandBuffer(m_ImmediateCommandBuffer, 0);
+
+	VkCommandBuffer cmd = m_ImmediateCommandBuffer;
+
+	VkCommandBufferBeginInfo cmdBeginInfo{};
+	cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	cmdBeginInfo.pNext = nullptr;
+	cmdBeginInfo.pInheritanceInfo = nullptr;
+	cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	vkBeginCommandBuffer(cmd, &cmdBeginInfo);
+	function(cmd);
+	vkEndCommandBuffer(cmd);
+
+	VkCommandBufferSubmitInfo cmdSubmitInfo{};
+	cmdSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+	cmdSubmitInfo.pNext = nullptr;
+	cmdSubmitInfo.commandBuffer = cmd;
+	cmdSubmitInfo.deviceMask = 0;
+
+	VkSubmitInfo2 submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+	submitInfo.pNext = nullptr;
+
+	submitInfo.waitSemaphoreInfoCount = 0;
+	submitInfo.pWaitSemaphoreInfos = nullptr;
+
+	submitInfo.signalSemaphoreInfoCount = 0;
+	submitInfo.pSignalSemaphoreInfos = nullptr;
+
+	submitInfo.commandBufferInfoCount = 1;
+	submitInfo.pCommandBufferInfos = &cmdSubmitInfo;
+
+	vkQueueSubmit2(m_GraphicsQueue, 1, &submitInfo, GetCurrentFrame().RenderFence);
+	vkWaitForFences(m_Device, 1, &m_ImmediateFence, true, 9999999999);
 }
 
 FrameData& VulkanEngine::GetCurrentFrame()
