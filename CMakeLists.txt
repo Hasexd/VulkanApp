@@ -32,8 +32,8 @@ endif()
 add_subdirectory(vendors/glfw)
 add_subdirectory(vendors/vk-bootstrap)
 
-# Include VulkanMemoryAllocator header-only library
-include_directories(vendors/VulkanMemoryAllocator/include)
+# Include directories
+include_directories(vendors/VulkanMemoryAllocator/include vendors/glm)
 
 # Find Vulkan
 find_package(Vulkan REQUIRED)
@@ -55,11 +55,6 @@ target_link_libraries(VulkanApp
     Vulkan::Vulkan
     glfw
     vk-bootstrap
-)
-
-# Include directories
-target_include_directories(VulkanApp PRIVATE
-    vendors/glm
 )
 
 # Platform-specific configurations
