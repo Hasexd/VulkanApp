@@ -79,7 +79,34 @@ set_target_properties(VulkanApp PROPERTIES
 # Group sources for Visual Studio
 source_group("Source Files" FILES ${SOURCES})
 
+# Shader compilation
+file(GLOB SHADER_SOURCES "${CMAKE_SOURCE_DIR}/shaders/*")
+set(SPIRV_OUTPUT_DIR "${CMAKE_BINARY_DIR}/shaders")
+file(MAKE_DIRECTORY ${SPIRV_OUTPUT_DIR})
+
+foreach(SHADER ${SHADER_SOURCES})
+    get_filename_component(SHADER_NAME ${SHADER} NAME)
+    string(REGEX REPLACE "\\.[^.]*$" "" SPIRV_OUTPUT_NO_EXT ${SHADER_NAME})
+
+    set(SPIRV_OUTPUT_FILE ${SPIRV_OUTPUT_DIR}/${SPIRV_OUTPUT_NO_EXT}.spv)
+
+    add_custom_command(
+        OUTPUT ${SPIRV_OUTPUT_FILE}
+        COMMAND Vulkan::glslc ${SHADER} -o ${SPIRV_OUTPUT_FILE}
+        DEPENDS ${SHADER}
+        COMMENT "Compiling shader: ${SHADER}"
+    )
+
+    list(APPEND SPIRV_OUTPUT_FILES ${SPIRV_OUTPUT_FILE})
+endforeach()
+
+add_custom_target(Shaders ALL DEPENDS ${SPIRV_OUTPUT_FILES})
+
+# Make VulkanApp depend on shader compilation
+add_dependencies(VulkanApp Shaders)
+
 # Print summary
 message(STATUS "VulkanApp Configuration:")
 message(STATUS "  Vulkan SDK Path: $ENV{VULKAN_SDK}")
 message(STATUS "  Source Files: ${SOURCES}")
+message(STATUS "  Shader Files: ${SHADER_SOURCES}")

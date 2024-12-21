@@ -342,6 +342,16 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
 }
 
+FrameData& VulkanEngine::GetCurrentFrame()
+{
+	return m_Frames[m_FrameNumber % m_FrameOverlap];
+}
+
+
+void VulkanEngine::SetWindow(GLFWwindow* window)
+{
+	m_Window = window;
+}
 
 
 void VulkanEngine::Cleanup()
@@ -380,13 +390,3 @@ void VulkanEngine::DestroySwapchain()
 	}
 }
 
-FrameData& VulkanEngine::GetCurrentFrame()
-{
-	return m_Frames[m_FrameNumber % m_FrameOverlap];
-}
-
-
-void VulkanEngine::SetWindow(GLFWwindow* window)
-{
-	m_Window = window;
-}
