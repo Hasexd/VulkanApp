@@ -20,6 +20,7 @@ public:
 	void SetWindow(GLFWwindow* window);
 	void Init();
 	void DrawFrame();
+	void OnWindowResize();
 
 	void Cleanup();
 public:
@@ -64,4 +65,6 @@ private:
 	GLFWwindow* m_Window;
 
 	DeletionQueue m_MainDeletionQueue;
+
+	bool m_ResizeRequested = false;
 };

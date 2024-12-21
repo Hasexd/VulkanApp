@@ -38,6 +38,18 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, resizable);
 	m_Window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+
+	glfwSetWindowUserPointer(m_Window, this);
+	glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height) -> void
+		{
+			auto* instance = static_cast<Application*>(glfwGetWindowUserPointer(window));
+
+			if (instance)
+			{
+				instance->m_Engine.OnWindowResize();
+			}
+		});
+
 	m_Engine.SetWindow(m_Window);
 	m_Engine.Init();
 }

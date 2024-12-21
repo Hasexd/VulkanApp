@@ -4,6 +4,17 @@
 #include <vk_mem_alloc.h>
 
 
+void VulkanEngine::OnWindowResize()
+{
+	m_ResizeRequested = true;
+
+	vkDeviceWaitIdle(m_Device);
+	DestroySwapchain();
+	InitSwapchain();
+
+	m_ResizeRequested = false;
+}
+
 void VulkanEngine::DrawFrame()
 {
 	vkWaitForFences(m_Device, 1, &GetCurrentFrame().RenderFence, true, 1000000000);
@@ -267,63 +278,71 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	m_SwapchainImageViews = vkbSwapchain.get_image_views().value();
 
 
-	VkExtent3D drawImageExtent{};
-	drawImageExtent.width = width;
-	drawImageExtent.height = height;
-	drawImageExtent.depth = 1;
+	if (!m_ResizeRequested)
+	{
+		VkExtent3D drawImageExtent{};
+		drawImageExtent.width = width;
+		drawImageExtent.height = height;
+		drawImageExtent.depth = 1;
 
-	m_DrawImage.ImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-	m_DrawImage.ImageExtent = drawImageExtent;
-	m_DrawExtent = { drawImageExtent.width, drawImageExtent.height };
+		m_DrawImage.ImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+		m_DrawImage.ImageExtent = drawImageExtent;
+		m_DrawExtent = { drawImageExtent.width, drawImageExtent.height };
 
-	VkImageUsageFlags drawImageUsageFlags{};
-	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	drawImageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
-	drawImageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		VkImageUsageFlags drawImageUsageFlags{};
+		drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		drawImageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
+		drawImageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-	VkImageCreateInfo imageCreateInfo{};
+		VkImageCreateInfo imageCreateInfo{};
 
-	imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageCreateInfo.pNext = nullptr;
-	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageCreateInfo.format = m_DrawImage.ImageFormat;
-	imageCreateInfo.extent = m_DrawImage.ImageExtent;
-	imageCreateInfo.mipLevels = 1;
-	imageCreateInfo.arrayLayers = 1;
-	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		imageCreateInfo.pNext = nullptr;
+		imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+		imageCreateInfo.format = m_DrawImage.ImageFormat;
+		imageCreateInfo.extent = m_DrawImage.ImageExtent;
+		imageCreateInfo.mipLevels = 1;
+		imageCreateInfo.arrayLayers = 1;
+		imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 
-	//change to linear for cpu 
-	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		//change to linear for cpu 
+		imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
-	imageCreateInfo.usage = drawImageUsageFlags;
+		imageCreateInfo.usage = drawImageUsageFlags;
 
-	VmaAllocationCreateInfo imageAllocInfo{};
-	imageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-	imageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VmaAllocationCreateInfo imageAllocInfo{};
+		imageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+		imageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-	vmaCreateImage(m_Allocator, &imageCreateInfo, &imageAllocInfo, &m_DrawImage.Image, &m_DrawImage.Allocation, nullptr);
 
-	VkImageViewCreateInfo imageViewInfo{};
-	imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	imageViewInfo.pNext = nullptr;
-	imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	imageViewInfo.image = m_DrawImage.Image;
-	imageViewInfo.format = m_DrawImage.ImageFormat;
-	imageViewInfo.subresourceRange.baseMipLevel = 0;
-	imageViewInfo.subresourceRange.levelCount = 1;
-	imageViewInfo.subresourceRange.baseArrayLayer = 0;
-	imageViewInfo.subresourceRange.layerCount = 1;
-	imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		vmaCreateImage(m_Allocator, &imageCreateInfo, &imageAllocInfo, &m_DrawImage.Image, &m_DrawImage.Allocation, nullptr);
 
-	vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
+		VkImageViewCreateInfo imageViewInfo{};
+		imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		imageViewInfo.pNext = nullptr;
+		imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		imageViewInfo.image = m_DrawImage.Image;
+		imageViewInfo.format = m_DrawImage.ImageFormat;
+		imageViewInfo.subresourceRange.baseMipLevel = 0;
+		imageViewInfo.subresourceRange.levelCount = 1;
+		imageViewInfo.subresourceRange.baseArrayLayer = 0;
+		imageViewInfo.subresourceRange.layerCount = 1;
+		imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-	m_MainDeletionQueue.PushFunction([=]() -> void
-		{
-			vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
-			vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
-		});
+
+
+		vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
+
+
+		m_MainDeletionQueue.PushFunction([&]() -> void
+			{
+				vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
+				vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
+			});
+	}
 }
+
 
 
 void VulkanEngine::Cleanup()
@@ -332,21 +351,23 @@ void VulkanEngine::Cleanup()
 	{
 		vkDeviceWaitIdle(m_Device);
 
+
 		for (uint32_t i = 0; i < m_FrameOverlap; i++)
 		{
 			vkDestroyCommandPool(m_Device, m_Frames[i].CommandPool, nullptr);
 			vkDestroyFence(m_Device, m_Frames[i].RenderFence, nullptr);
 			vkDestroySemaphore(m_Device, m_Frames[i].RenderSemaphore, nullptr);
 			vkDestroySemaphore(m_Device, m_Frames[i].SwapchainSemaphore, nullptr);
-
-			m_Frames[i].DeletionQueue.Flush();
 		}
 		m_MainDeletionQueue.Flush();
+
+
 		DestroySwapchain();
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
 		vkDestroyDevice(m_Device, nullptr);
 		vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger, nullptr);
 		vkDestroyInstance(m_Instance, nullptr);
+		IsInitialized = false;
 	}
 }
 
