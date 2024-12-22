@@ -17,6 +17,7 @@ public:
 private:
 	void Init(uint32_t width, uint32_t height, const char* title, bool resizable);
 private:
+	uint32_t m_Width, m_Height;
 	GLFWwindow* m_Window;
 	VulkanEngine m_Engine;
 };

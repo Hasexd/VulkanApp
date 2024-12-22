@@ -8,13 +8,13 @@ static std::filesystem::path s_PathToShaders = "../../shaders/";
 
 void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
-	m_ResizeRequested = true;
-
-	vkDeviceWaitIdle(m_Device);
-	DestroySwapchain();
-	InitSwapchain();
-
-	m_ResizeRequested = false;
+	if (ResizeRequested)
+	{
+		vkDeviceWaitIdle(m_Device);
+		DestroySwapchain();
+		CreateSwapchain(width, height);
+		ResizeRequested = false;
+	}
 }
 
 void VulkanEngine::DrawFrame()
@@ -25,7 +25,10 @@ void VulkanEngine::DrawFrame()
 
 	uint32_t swapchainImageIndex;
 
-	vkAcquireNextImageKHR(m_Device, m_Swapchain, 1000000000, GetCurrentFrame().SwapchainSemaphore, nullptr, &swapchainImageIndex);
+	if (vkAcquireNextImageKHR(m_Device, m_Swapchain, 1000000000, GetCurrentFrame().SwapchainSemaphore, nullptr, &swapchainImageIndex) == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		ResizeRequested = true;
+	}
 
 	VkCommandBuffer cmd = GetCurrentFrame().MainCommandBuffer;
 	vkResetCommandBuffer(cmd, 0);
@@ -103,7 +106,10 @@ void VulkanEngine::DrawFrame()
 	presentInfo.pImageIndices = &swapchainImageIndex;
 
 	
-	vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
+	if (vkQueuePresentKHR(m_GraphicsQueue, &presentInfo) == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		ResizeRequested = true;
+	}
 
 	m_FrameNumber++;
 }
@@ -219,6 +225,7 @@ void VulkanEngine::InitVulkan()
 {
 	InitDevices();
 	InitSwapchain();
+	CreateDrawImage();
 	InitCommands();
 	InitSyncStructures();
 	InitDescriptors();
@@ -398,7 +405,7 @@ void VulkanEngine::InitPipelines()
 
 	vkDestroyShaderModule(m_Device, gradientShader, nullptr);
 	vkDestroyShaderModule(m_Device, skyShader, nullptr);
-	if (!m_ResizeRequested)
+	if (!ResizeRequested)
 	{
 		m_MainDeletionQueue.PushFunction([&]() -> void
 			{
@@ -558,7 +565,7 @@ void VulkanEngine::InitDescriptors()
 
 	vkUpdateDescriptorSets(m_Device, 1, &drawImageWrite, 0, nullptr);
 
-	if (!m_ResizeRequested)
+	if (!ResizeRequested)
 	{
 		m_MainDeletionQueue.PushFunction([&]() -> void
 			{
@@ -739,13 +746,13 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	m_Swapchain = vkbSwapchain.swapchain;
 	m_SwapchainImages = vkbSwapchain.get_images().value();
 	m_SwapchainImageViews = vkbSwapchain.get_image_views().value();
+}
 
 
-	if (m_ResizeRequested)
-	{
-		vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
-		vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
-	}
+void VulkanEngine::CreateDrawImage()
+{
+	int width, height;
+	glfwGetWindowSize(m_Window, &width, &height);
 
 	VkExtent3D drawImageExtent{};
 	drawImageExtent.width = width;
@@ -840,7 +847,7 @@ void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& fu
 	vkWaitForFences(m_Device, 1, &m_ImmediateFence, true, 9999999999);
 }
 
-GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
+GPUMeshBuffers VulkanEngine::UploadMesh(const std::span<uint32_t>& indices, const std::span<Vertex>& vertices)
 {
 	const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
 	const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
@@ -957,7 +964,6 @@ void VulkanEngine::Cleanup()
 void VulkanEngine::DestroySwapchain()
 {
 	vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
-
 	for (auto& swapchainImageView : m_SwapchainImageViews)
 	{
 		vkDestroyImageView(m_Device, swapchainImageView, nullptr);

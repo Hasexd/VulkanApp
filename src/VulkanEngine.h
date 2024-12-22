@@ -41,9 +41,10 @@ public:
 
 	void Cleanup();
 public:
+	bool ResizeRequested = false;
 	bool IsInitialized = false;
 private:
-	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+	GPUMeshBuffers UploadMesh(const std::span<uint32_t>& indices, const std::span<Vertex>& vertices);
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;
 
 	void DrawBackground(const VkCommandBuffer& cmd);
@@ -60,6 +61,7 @@ private:
 	void InitImgui();
 	void InitDefaultData();
 	void CreateSwapchain(uint32_t width, uint32_t height);
+	void CreateDrawImage();
 	void DestroySwapchain();
 	void DestroyBuffer(const AllocatedBuffer& buffer) const;
 
@@ -120,5 +122,4 @@ private:
 
 	DeletionQueue m_MainDeletionQueue;
 
-	bool m_ResizeRequested = false;
 };
