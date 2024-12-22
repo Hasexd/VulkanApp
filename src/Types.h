@@ -67,3 +67,34 @@ struct ComputeEffect
 
 	ComputePushConstants Data;
 };
+
+
+struct AllocatedBuffer
+{
+	VkBuffer Buffer;
+	VmaAllocation Allocation;
+	VmaAllocationInfo Info;
+};
+
+
+struct Vertex
+{
+	float UvX, UvY;
+	glm::vec3 Position;
+	glm::vec3 Normal;
+	glm::vec4 Color;
+};
+
+
+struct GPUMeshBuffers
+{
+	AllocatedBuffer IndexBuffer;
+	AllocatedBuffer VertexBuffer;
+	VkDeviceAddress VertexBufferAddress;
+};
+
+struct GPUDrawPushConstants
+{
+	glm::mat4 WorldMatrix;
+	VkDeviceAddress VertexBuffer;
+};

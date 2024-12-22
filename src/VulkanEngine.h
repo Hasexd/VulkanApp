@@ -4,6 +4,8 @@
 #include <cmath>
 #include <filesystem>
 #include <functional>
+#include <span>
+#include <array>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -32,7 +34,7 @@ public:
 	void Init();
 	void DrawFrame();
 	void OnWindowResize(uint32_t width, uint32_t height);
-	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
+	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function) ;
 
 	std::vector<ComputeEffect>& GetBackgroundEffects() { return m_BackgroundEffects; }
 	int& GetCurrentBackgroundEffects() { return m_CurrentBackgroundEffect; }
@@ -41,6 +43,9 @@ public:
 public:
 	bool IsInitialized = false;
 private:
+	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;
+
 	void DrawBackground(const VkCommandBuffer& cmd);
 	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const;
 	void DrawGeometry(VkCommandBuffer cmd);
@@ -53,10 +58,13 @@ private:
 	void InitDescriptors();
 	void InitPipelines();
 	void InitImgui();
+	void InitDefaultData();
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
+	void DestroyBuffer(const AllocatedBuffer& buffer) const;
 
 	void InitTrianglePipeline();
+	void InitMeshPipeline();
 
 	FrameData& GetCurrentFrame();
 private:
@@ -101,6 +109,11 @@ private:
 
 	VkPipeline m_TrianglePipeline;
 	VkPipelineLayout m_TrianglePipelineLayout;
+
+	VkPipeline m_MeshPipeline;
+	VkPipelineLayout m_MeshPipelineLayout;
+
+	GPUMeshBuffers m_Rectangle;
 
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 	GLFWwindow* m_Window;
