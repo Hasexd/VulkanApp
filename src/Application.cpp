@@ -21,6 +21,12 @@ void Application::Run()
 	while (!glfwWindowShouldClose(m_Window))
 	{
 		glfwPollEvents();
+		ImGui_ImplVulkan_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+		ImGui::ShowDemoWindow();
+		ImGui::EndFrame();
+		ImGui::Render();
 		m_Engine.DrawFrame();
 	}
 
@@ -46,7 +52,7 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 
 			if (instance)
 			{
-				instance->m_Engine.OnWindowResize();
+				instance->m_Engine.OnWindowResize(width, height);
 			}
 		});
 

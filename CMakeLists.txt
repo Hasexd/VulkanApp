@@ -35,7 +35,7 @@ add_subdirectory(vendors/glm)
 add_subdirectory(vendors/VulkanMemoryAllocator)
 
 # Include directories
-include_directories(vendors/VulkanMemoryAllocator/include vendors/glm)
+include_directories(vendors/VulkanMemoryAllocator/include vendors/glm vendors/imgui vendors/imgui/backends)
 
 # Find Vulkan
 find_package(Vulkan REQUIRED)
@@ -45,8 +45,20 @@ file(GLOB SOURCES
     src/*.cpp
 )
 
+
+
+file(GLOB IMGUI_SOURCES
+    vendors/imgui/*.cpp
+    vendors/imgui/backends/imgui_impl_glfw.cpp
+    vendors/imgui/backends/imgui_impl_vulkan.cpp
+)
+
 # Add executable
 add_executable(VulkanApp ${SOURCES})
+
+#imgui source
+target_sources(VulkanApp PRIVATE ${IMGUI_SOURCES})
+
 
 # Link libraries
 target_link_libraries(VulkanApp
@@ -71,8 +83,6 @@ set_target_properties(VulkanApp PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
 
-# Group sources for Visual Studio
-source_group("Source Files" FILES ${SOURCES})
 
 # Shader compilation
 file(GLOB SHADER_SOURCES "${CMAKE_SOURCE_DIR}/shaders/*")

@@ -4,7 +4,7 @@
 #include <vk_mem_alloc.h>
 
 
-void VulkanEngine::OnWindowResize()
+void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
 	m_ResizeRequested = true;
 
@@ -42,6 +42,8 @@ void VulkanEngine::DrawFrame()
 	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	Image::CopyImageToImage(cmd, m_DrawImage.Image, m_SwapchainImages[swapchainImageIndex], m_DrawExtent, m_SwapchainExtent);
 	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+	DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
 	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 
@@ -101,18 +103,46 @@ void VulkanEngine::DrawFrame()
 	m_FrameNumber++;
 }
 
-void VulkanEngine::DrawBackground(const VkCommandBuffer& cmd)
+void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const
 {
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipeline);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
-	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.f), std::ceil(m_DrawExtent.height / 16.f), 1);
+	VkRenderingAttachmentInfo colorAttachmentInfo{};
+	colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	colorAttachmentInfo.pNext = nullptr;
+	colorAttachmentInfo.imageView = targetImageView;
+	colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+	VkRenderingInfo renderInfo{};
+	renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	renderInfo.pNext = nullptr;
+
+	renderInfo.renderArea = VkRect2D{ VkOffset2D { 0, 0 }, m_SwapchainExtent };
+	renderInfo.layerCount = 1;
+	renderInfo.colorAttachmentCount = 1;
+	renderInfo.pColorAttachments = &colorAttachmentInfo;
+	renderInfo.pDepthAttachment = nullptr;
+	renderInfo.pStencilAttachment = nullptr;
+
+	vkCmdBeginRendering(cmd, &renderInfo);
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+	vkCmdEndRendering(cmd);
 
 }
 
 
+void VulkanEngine::DrawBackground(const VkCommandBuffer& cmd) const
+{
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
+	vkCmdDispatch(cmd, m_DrawExtent.width, m_DrawExtent.height, 1);
+
+}
+
 void VulkanEngine::Init()
 {
 	InitVulkan();
+	InitImgui();
 	IsInitialized = true;
 }
 
@@ -125,6 +155,73 @@ void VulkanEngine::InitVulkan()
 	InitDescriptors();
 	InitPipelines();
 }
+
+void VulkanEngine::InitImgui()
+{
+	VkDescriptorPoolSize poolSizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 } };
+
+	VkDescriptorPoolCreateInfo poolInfo = {};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	poolInfo.maxSets = 1000;
+	poolInfo.poolSizeCount = (uint32_t)std::size(poolSizes);
+	poolInfo.pPoolSizes = poolSizes;
+
+	VkDescriptorPool imguiPool;
+	vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &imguiPool);
+
+
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	ImGui::StyleColorsDark();
+
+	ImGui_ImplGlfw_InitForVulkan(m_Window, true);
+
+	ImGui_ImplVulkan_InitInfo initInfo = {};
+	initInfo.Instance = m_Instance;
+	initInfo.PhysicalDevice = m_PhysicalDevice;
+	initInfo.Device = m_Device;
+	initInfo.QueueFamily = m_GraphicsQueueFamily;
+	initInfo.Queue = m_GraphicsQueue;
+	initInfo.DescriptorPool = imguiPool;
+	initInfo.MinImageCount = 3;
+	initInfo.ImageCount = 3;
+	initInfo.UseDynamicRendering = true;
+	initInfo.Allocator = m_Allocator->GetAllocationCallbacks();
+	initInfo.CheckVkResultFn = [](VkResult err) -> void
+	{
+		if (err != VK_SUCCESS)
+			printf("Error: %d", err);
+	};
+
+	initInfo.PipelineRenderingCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+	initInfo.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+	initInfo.PipelineRenderingCreateInfo.pColorAttachmentFormats = &m_SwapchainImageFormat;
+
+
+	initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+	ImGui_ImplVulkan_Init(&initInfo);
+
+	ImGui_ImplVulkan_CreateFontsTexture();
+
+	m_MainDeletionQueue.PushFunction([&]() {
+		ImGui_ImplVulkan_Shutdown();
+		vkDestroyDescriptorPool(m_Device, imguiPool, nullptr);
+		});
+}
+
 
 void VulkanEngine::InitPipelines()
 {
@@ -502,7 +599,6 @@ void VulkanEngine::Cleanup()
 	{
 		vkDeviceWaitIdle(m_Device);
 
-
 		for (uint32_t i = 0; i < m_FrameOverlap; i++)
 		{
 			vkDestroyCommandPool(m_Device, m_Frames[i].CommandPool, nullptr);
@@ -526,9 +622,9 @@ void VulkanEngine::DestroySwapchain()
 {
 	vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
 
-	for (size_t i = 0; i < m_SwapchainImageViews.size(); i++)
+	for (auto& swapchainImageView : m_SwapchainImageViews)
 	{
-		vkDestroyImageView(m_Device, m_SwapchainImageViews[i], nullptr);
+		vkDestroyImageView(m_Device, swapchainImageView, nullptr);
 	}
 }
 

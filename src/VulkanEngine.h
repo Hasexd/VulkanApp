@@ -9,6 +9,11 @@
 #include <GLFW/glfw3.h>
 #include <vk_mem_alloc.h>
 
+
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
+
 #include "VkBootstrap.h"
 #include "Types.h"
 #include "Image.h"
@@ -23,13 +28,16 @@ public:
 	void SetWindow(GLFWwindow* window);
 	void Init();
 	void DrawFrame();
-	void OnWindowResize();
+	void OnWindowResize(uint32_t width, uint32_t height);
 	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
 	void Cleanup();
 public:
 	bool IsInitialized = false;
 private:
+	void DrawBackground(const VkCommandBuffer& cmd) const;
+	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const;
+
 	void InitVulkan();
 	void InitDevices();
 	void InitSwapchain();
@@ -37,7 +45,7 @@ private:
 	void InitSyncStructures();
 	void InitDescriptors();
 	void InitPipelines();
-	void DrawBackground(const VkCommandBuffer& cmd);
+	void InitImgui();
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
 
@@ -55,7 +63,7 @@ private:
 	std::vector<VkImageView> m_SwapchainImageViews;
 	VkExtent2D m_SwapchainExtent;
 
-	static const uint32_t m_FrameOverlap = 2;
+	static constexpr uint32_t m_FrameOverlap = 2;
 	FrameData m_Frames[m_FrameOverlap];
 	uint32_t m_FrameNumber = 0;
 
