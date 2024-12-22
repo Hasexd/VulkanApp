@@ -44,7 +44,6 @@ VkPipeline PipelineBuilder::BuildPipeline(VkDevice device)
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = { .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 	pipelineInfo.pNext = &m_RenderInfo;
-
 	pipelineInfo.stageCount = (uint32_t)m_ShaderStages.size();
 	pipelineInfo.pStages = m_ShaderStages.data();
 	pipelineInfo.pVertexInputState = &_vertexInputInfo;
@@ -75,7 +74,7 @@ VkPipeline PipelineBuilder::BuildPipeline(VkDevice device)
 
 }
 
-void PipelineBuilder::SetShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader)
+void PipelineBuilder::SetShaders(VkShaderModule vertexShader, const char* vertName,  VkShaderModule fragmentShader, const char* fragName)
 {
 	m_ShaderStages.clear();
 
@@ -84,6 +83,7 @@ void PipelineBuilder::SetShaders(VkShaderModule vertexShader, VkShaderModule fra
 	vertexInfo.pNext = nullptr;
 	vertexInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
 	vertexInfo.module = vertexShader;
+	vertexInfo.pName = vertName;
 
 	m_ShaderStages.push_back(vertexInfo);
 
@@ -92,6 +92,7 @@ void PipelineBuilder::SetShaders(VkShaderModule vertexShader, VkShaderModule fra
 	fragmentInfo.pNext = nullptr;
 	fragmentInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	fragmentInfo.module = fragmentShader;
+	fragmentInfo.pName = fragName;
 
 	m_ShaderStages.push_back(fragmentInfo);
 }

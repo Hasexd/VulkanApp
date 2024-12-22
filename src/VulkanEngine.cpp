@@ -3,6 +3,8 @@
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
+static std::filesystem::path s_PathToShaders = "../../shaders/";
+
 
 void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
@@ -38,13 +40,16 @@ void VulkanEngine::DrawFrame()
 	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	DrawBackground(cmd);
+	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
+	DrawGeometry(cmd);
+	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	Image::CopyImageToImage(cmd, m_DrawImage.Image, m_SwapchainImages[swapchainImageIndex], m_DrawExtent, m_SwapchainExtent);
-	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	Image::CopyImageToImage(cmd, m_DrawImage.Image, m_SwapchainImages[swapchainImageIndex],
+		{ m_DrawExtent.width, m_DrawExtent.height }, {m_SwapchainExtent.width, m_SwapchainExtent.height}, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
-	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 
 	vkEndCommandBuffer(cmd);
@@ -103,6 +108,54 @@ void VulkanEngine::DrawFrame()
 	m_FrameNumber++;
 }
 
+
+void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
+{
+	VkRenderingAttachmentInfo colorAttachment{};
+	colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	colorAttachment.pNext = nullptr;
+	colorAttachment.imageView = m_DrawImage.ImageView;
+	colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+	VkRenderingInfo renderInfo{};
+	renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	renderInfo.pNext = nullptr;
+
+	renderInfo.renderArea = VkRect2D{ VkOffset2D { 0, 0 }, m_DrawExtent };
+	renderInfo.layerCount = 1;
+	renderInfo.colorAttachmentCount = 1;
+	renderInfo.pColorAttachments = &colorAttachment;
+	renderInfo.pDepthAttachment = nullptr;
+	renderInfo.pStencilAttachment = nullptr;
+
+	vkCmdBeginRendering(cmd, &renderInfo);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_TrianglePipeline);
+
+	VkViewport viewport{};
+	viewport.x = 0;
+	viewport.y = 0;
+	viewport.width = m_DrawExtent.width;
+	viewport.height = m_DrawExtent.height;
+	viewport.minDepth = 0.f;
+	viewport.maxDepth = 1.f;
+
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor{};
+	scissor.offset.x = 0;
+	scissor.offset.y = 0;
+	scissor.extent.width = m_DrawExtent.width;
+	scissor.extent.height = m_DrawExtent.height;
+
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	vkCmdDraw(cmd, 3, 1, 0, 0);
+	vkCmdEndRendering(cmd);
+
+}
+
 void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const
 {
 	VkRenderingAttachmentInfo colorAttachmentInfo{};
@@ -129,6 +182,7 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) c
 	vkCmdEndRendering(cmd);
 
 }
+
 
 
 void VulkanEngine::DrawBackground(const VkCommandBuffer& cmd)
@@ -312,7 +366,63 @@ void VulkanEngine::InitPipelines()
 
 			});
 	}
+
+	InitTrianglePipeline();
 }
+
+
+void VulkanEngine::InitTrianglePipeline()
+{
+	VkShaderModule triangleFragShader;
+	std::filesystem::path fragPath = s_PathToShaders / "colored_triangle_frag.spv";
+	if (!Pipelines::LoadShaderModule(fragPath.string().c_str(), m_Device, &triangleFragShader))
+	{
+		printf("Error when building the triangle fragment shader");
+		return;
+	}
+
+	VkShaderModule triangleVertShader;
+	std::filesystem::path vertPath = s_PathToShaders / "colored_triangle_vert.spv";
+	if (!Pipelines::LoadShaderModule(vertPath.string().c_str(), m_Device, &triangleVertShader))
+	{
+		printf("Error when building the triangle vertex shader");
+		return;
+	}
+
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.pNext = nullptr;
+	pipelineLayoutInfo.pSetLayouts = &m_DrawImageDescriptorLayout;
+	pipelineLayoutInfo.setLayoutCount = 1;
+
+	vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_TrianglePipelineLayout);
+
+	PipelineBuilder pipelineBuilder;
+
+	pipelineBuilder.m_PipelineLayout = m_TrianglePipelineLayout;
+	pipelineBuilder.SetShaders(triangleVertShader, "main", triangleFragShader, "main");
+	pipelineBuilder.SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	pipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
+	pipelineBuilder.SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	pipelineBuilder.SetMultisamplingNone();
+	pipelineBuilder.DisableBlending();
+	pipelineBuilder.DisableDepthtest();
+	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.ImageFormat);
+	pipelineBuilder.SetDepthFormat(VK_FORMAT_UNDEFINED);
+
+	m_TrianglePipeline = pipelineBuilder.BuildPipeline(m_Device);
+
+	vkDestroyShaderModule(m_Device, triangleFragShader, nullptr);
+	vkDestroyShaderModule(m_Device, triangleVertShader, nullptr);
+
+	m_MainDeletionQueue.PushFunction([&]()-> void
+	{
+		vkDestroyPipelineLayout(m_Device, m_TrianglePipelineLayout, nullptr);
+		vkDestroyPipeline(m_Device, m_TrianglePipeline, nullptr);
+	});
+}
+
 
 void VulkanEngine::InitDescriptors()
 {

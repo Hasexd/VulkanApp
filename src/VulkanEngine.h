@@ -43,6 +43,7 @@ public:
 private:
 	void DrawBackground(const VkCommandBuffer& cmd);
 	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const;
+	void DrawGeometry(VkCommandBuffer cmd);
 
 	void InitVulkan();
 	void InitDevices();
@@ -54,6 +55,8 @@ private:
 	void InitImgui();
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
+
+	void InitTrianglePipeline();
 
 	FrameData& GetCurrentFrame();
 private:
@@ -95,6 +98,9 @@ private:
 
 	std::vector<ComputeEffect> m_BackgroundEffects;
 	int m_CurrentBackgroundEffect = 0;
+
+	VkPipeline m_TrianglePipeline;
+	VkPipelineLayout m_TrianglePipelineLayout;
 
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 	GLFWwindow* m_Window;

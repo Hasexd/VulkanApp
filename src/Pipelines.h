@@ -23,7 +23,7 @@ public:
 	void Clear();
 
 	VkPipeline BuildPipeline(VkDevice device);
-	void SetShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
+	void SetShaders(VkShaderModule vertexShader, const char* vertName, VkShaderModule fragmentShader, const char* fragName);
 	void SetInputTopology(VkPrimitiveTopology topology);
 	void SetPolygonMode(VkPolygonMode mode);
 	void SetCullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);

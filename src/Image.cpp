@@ -39,7 +39,7 @@ namespace Image
 	}
 
 
-	void CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize)
+	void CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize, VkImageLayout srcLayout)
 	{
 		VkImageBlit2 blitRegion{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
 
@@ -65,7 +65,7 @@ namespace Image
 		blitInfo.dstImage = destination;
 		blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 		blitInfo.srcImage = source;
-		blitInfo.srcImageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		blitInfo.srcImageLayout = srcLayout;
 		blitInfo.filter = VK_FILTER_LINEAR;
 		blitInfo.regionCount = 1;
 		blitInfo.pRegions = &blitRegion;
