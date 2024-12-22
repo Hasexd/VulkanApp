@@ -6,7 +6,7 @@
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
-
+#include <glm/glm.hpp>
 
 struct DeletionQueue
 {
@@ -48,4 +48,22 @@ struct AllocatedImage
 	VmaAllocation Allocation;
 	VkExtent3D ImageExtent;
 	VkFormat ImageFormat;
+};
+
+
+struct ComputePushConstants
+{
+	glm::vec4 Data1;
+	glm::vec4 Data2;
+	glm::vec4 Data3;
+	glm::vec4 Data4;
+};
+
+struct ComputeEffect
+{
+	const char* Name;
+	VkPipeline Pipeline;
+	VkPipelineLayout Layout;
+
+	ComputePushConstants Data;
 };

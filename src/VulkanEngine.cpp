@@ -131,11 +131,17 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) c
 }
 
 
-void VulkanEngine::DrawBackground(const VkCommandBuffer& cmd) const
+void VulkanEngine::DrawBackground(const VkCommandBuffer& cmd)
 {
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipeline);
+	ComputeEffect& effect = m_BackgroundEffects[m_CurrentBackgroundEffect];
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.Pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
-	vkCmdDispatch(cmd, m_DrawExtent.width, m_DrawExtent.height, 1);
+
+	
+	vkCmdPushConstants(cmd, m_GradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.Data);
+
+	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.f), std::ceil(m_DrawExtent.height / 16.f), 1);
 
 }
 
@@ -184,6 +190,7 @@ void VulkanEngine::InitImgui()
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImGui::StyleColorsDark();
 
 	ImGui_ImplGlfw_InitForVulkan(m_Window, true);
@@ -231,14 +238,30 @@ void VulkanEngine::InitPipelines()
 	computeLayoutInfo.pSetLayouts = &m_DrawImageDescriptorLayout;
 	computeLayoutInfo.setLayoutCount = 1;
 
+	VkPushConstantRange pushConstant{};
+	pushConstant.offset = 0;
+	pushConstant.size = sizeof(ComputePushConstants);
+	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	computeLayoutInfo.pPushConstantRanges = &pushConstant;
+	computeLayoutInfo.pushConstantRangeCount = 1;
+
 	vkCreatePipelineLayout(m_Device, &computeLayoutInfo, nullptr, &m_GradientPipelineLayout);
 
-	VkShaderModule computeDrawShader;
+	VkShaderModule gradientShader;
 
-	std::filesystem::path path = "../../shaders/gradient.spv";
-	if (!Pipelines::LoadShaderModule(path.string().c_str(), m_Device, &computeDrawShader))
+	std::filesystem::path pathToGradient = "../../shaders/gradient_color.spv";
+	if (!Pipelines::LoadShaderModule(pathToGradient.string().c_str(), m_Device, &gradientShader))
 	{
-		printf("Error when building a shader module!");
+		printf("Error when building the gradient shader!");
+		return;
+	}
+
+	VkShaderModule skyShader;
+	std::filesystem::path pathToSky = "../../shaders/sky.spv";
+	if (!Pipelines::LoadShaderModule(pathToSky.string().c_str(), m_Device, &skyShader))
+	{
+		printf("Error when building the sky shader!");
 		return;
 	}
 
@@ -246,7 +269,7 @@ void VulkanEngine::InitPipelines()
 	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	stageInfo.pNext = nullptr;
 	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageInfo.module = computeDrawShader;
+	stageInfo.module = gradientShader;
 	stageInfo.pName = "main";
 
 	VkComputePipelineCreateInfo computePipelineCreateInfo{};
@@ -255,15 +278,38 @@ void VulkanEngine::InitPipelines()
 	computePipelineCreateInfo.layout = m_GradientPipelineLayout;
 	computePipelineCreateInfo.stage = stageInfo;
 
-	vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &m_GradientPipeline);
-	vkDestroyShaderModule(m_Device, computeDrawShader, nullptr);
+	ComputeEffect gradient;
+	gradient.Layout = m_GradientPipelineLayout;
+	gradient.Name = "Gradient";
+	gradient.Data = {};
+	gradient.Data.Data1 = glm::vec4(1, 0, 0, 1);
+	gradient.Data.Data2 = glm::vec4(0, 0, 1, 1);
 
+	vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.Pipeline);
+
+	computePipelineCreateInfo.stage.module = skyShader;
+
+	ComputeEffect sky;
+	sky.Layout = m_GradientPipelineLayout;
+	sky.Name = "Sky";
+	sky.Data = {};
+	sky.Data.Data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
+	vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.Pipeline);
+
+	m_BackgroundEffects.push_back(gradient);
+	m_BackgroundEffects.push_back(sky);
+
+
+	vkDestroyShaderModule(m_Device, gradientShader, nullptr);
+	vkDestroyShaderModule(m_Device, skyShader, nullptr);
 	if (!m_ResizeRequested)
 	{
 		m_MainDeletionQueue.PushFunction([&]() -> void
 			{
 				vkDestroyPipelineLayout(m_Device, m_GradientPipelineLayout, nullptr);
-				vkDestroyPipeline(m_Device, m_GradientPipeline, nullptr);
+				vkDestroyPipeline(m_Device, sky.Pipeline, nullptr);
+				vkDestroyPipeline(m_Device, gradient.Pipeline, nullptr);
+
 			});
 	}
 }

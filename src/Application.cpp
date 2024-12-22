@@ -24,7 +24,23 @@ void Application::Run()
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
-		ImGui::ShowDemoWindow();
+
+		if (ImGui::Begin("Background"))
+		{
+			ComputeEffect& selected = m_Engine.GetBackgroundEffects()[m_Engine.GetCurrentBackgroundEffects()];
+			ImGui::Text("Selected effect: ", selected.Name);
+			ImGui::SliderInt("Effect index:", &m_Engine.GetCurrentBackgroundEffects(), 0, m_Engine.GetBackgroundEffects().size() - 1);
+
+			ImGui::InputFloat4("Data1", reinterpret_cast<float*>(&selected.Data.Data1));
+			ImGui::InputFloat4("Data2", reinterpret_cast<float*>(&selected.Data.Data2));
+			ImGui::InputFloat4("Data3", reinterpret_cast<float*>(&selected.Data.Data3));
+			ImGui::InputFloat4("Data4", reinterpret_cast<float*>(&selected.Data.Data4));
+
+		}
+		ImGui::End();
+
+
+
 		ImGui::EndFrame();
 		ImGui::Render();
 		m_Engine.DrawFrame();
