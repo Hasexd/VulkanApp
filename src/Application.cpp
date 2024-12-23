@@ -26,17 +26,42 @@ void Application::Run()
 		if (m_Engine.ResizeRequested)
 		{
 			m_Engine.OnWindowResize(m_Width, m_Height);
+
+			delete[] m_PixelData;
+			m_PixelData = new uint32_t[m_Width * m_Height];
 		}
 
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		ImGui::EndFrame();
+		ImGui::Begin("Information");
+		ImGui::Text("Rendering took: %.5fms", m_LastRenderTime);
+		ImGui::End();
+
 		ImGui::Render();
-		m_Engine.DrawFrame();
+
+		Render();
+		m_Engine.DrawFrame(m_PixelData);
+
+		
 	}
 
+}
+
+
+void Application::Render()
+{
+	auto startTime = std::chrono::high_resolution_clock::now();
+	for (uint32_t i = 0; i < m_Width * m_Height; i++)
+	{
+		m_PixelData[i] = Random::UInt();
+		m_PixelData[i] |= 0xff000000;
+	}
+	auto endTime = std::chrono::high_resolution_clock::now();
+
+	std::chrono::duration<float, std::milli> duration = endTime - startTime;
+	m_LastRenderTime = duration.count();
 }
 
 
@@ -71,6 +96,8 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 				instance->m_Height = height;
 			}
 		});
+
+	m_PixelData = new uint32_t[m_Width * m_Height];
 }
 
 void Application::Cleanup()

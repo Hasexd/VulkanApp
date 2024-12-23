@@ -17,7 +17,7 @@ void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 	}
 }
 
-void VulkanEngine::DrawFrame()
+void VulkanEngine::DrawFrame(const uint32_t* pixelData)
 {
 	vkWaitForFences(m_Device, 1, &GetCurrentFrame().RenderFence, true, 1000000000);
 	GetCurrentFrame().DataDeletionQueue.Flush();
@@ -40,14 +40,14 @@ void VulkanEngine::DrawFrame()
 	cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 	vkBeginCommandBuffer(cmd, &cmdBeginInfo);
-	
-	if (m_PixelData)
+	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	if (pixelData)
 	{
 		void* data = m_Buffer.Allocation->GetMappedData();
-		memcpy(data, m_PixelData, m_SwapchainExtent.width * m_SwapchainExtent.height * 4);
+		memcpy(data, pixelData, m_SwapchainExtent.width * m_SwapchainExtent.height * 4);
 
 
-		Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 		VkBufferImageCopy region = {};
 		region.bufferOffset = 0;
@@ -62,10 +62,9 @@ void VulkanEngine::DrawFrame()
 
 
 		vkCmdCopyBufferToImage(cmd, m_Buffer.Buffer, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-		Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-		DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
 	}
-
+	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
 	vkEndCommandBuffer(cmd);
 
 	VkCommandBufferSubmitInfo cmdSubmitInfo{};
@@ -117,6 +116,7 @@ void VulkanEngine::DrawFrame()
 	presentInfo.pImageIndices = &swapchainImageIndex;
 
 	
+	
 	if (vkQueuePresentKHR(m_GraphicsQueue, &presentInfo) == VK_ERROR_OUT_OF_DATE_KHR)
 	{
 		ResizeRequested = true;
@@ -150,6 +150,8 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) c
 	vkCmdBeginRendering(cmd, &renderInfo);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 	vkCmdEndRendering(cmd);
+
+	
 }
 
 
@@ -159,11 +161,6 @@ void VulkanEngine::Init()
 	InitImgui();
 
 	uint32_t size = m_SwapchainExtent.width * m_SwapchainExtent.height * 4;
-
-	m_PixelData = new uint32_t[size];
-
-	for (uint32_t i = 0; i < size; i++)
-		m_PixelData[i] = 0xff0000ff;
 
 	IsInitialized = true;
 }
@@ -219,7 +216,6 @@ void VulkanEngine::InitImgui()
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImGui::StyleColorsDark();
 
 	ImGui_ImplGlfw_InitForVulkan(m_Window, true);

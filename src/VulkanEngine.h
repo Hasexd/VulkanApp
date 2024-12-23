@@ -17,9 +17,8 @@
 #include <imgui_impl_vulkan.h>
 
 #include "VkBootstrap.h"
-#include "Types.h"
+#include "VulkanTypes.h"
 #include "Image.h"
-#include "Random.h"
 
 
 
@@ -30,9 +29,8 @@ public:
 
 	void SetWindow(GLFWwindow* window);
 	void Init();
-	void DrawFrame();
+	void DrawFrame(const uint32_t* pixelData);
 	void OnWindowResize(uint32_t width, uint32_t height);
-	void SetPixelData(uint32_t* pixelData) { m_PixelData = pixelData; };
 
 	void Cleanup();
 public:
@@ -58,7 +56,6 @@ private:
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	FrameData& GetCurrentFrame();
 private:
-	uint32_t* m_PixelData;
 	VkInstance m_Instance;
 	VkPhysicalDevice m_PhysicalDevice;
 	VkDevice m_Device;
@@ -79,8 +76,6 @@ private:
 	uint32_t m_GraphicsQueueFamily = 0;
 
 	VmaAllocator m_Allocator;
-
-	uint32_t* pixelData;
 
 	AllocatedBuffer m_Buffer;
 
