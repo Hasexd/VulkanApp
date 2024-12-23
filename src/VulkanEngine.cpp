@@ -3,8 +3,40 @@
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
-static std::filesystem::path s_PathToShaders = "../../shaders/";
 
+
+namespace
+{
+	void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout)
+	{
+		VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+		imageBarrier.pNext = nullptr;
+
+		imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+		imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		imageBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+
+		imageBarrier.oldLayout = currentLayout;
+		imageBarrier.newLayout = newLayout;
+
+		VkImageSubresourceRange subImage{};
+		subImage.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subImage.baseMipLevel = 0;
+		subImage.levelCount = 1;
+		subImage.baseArrayLayer = 0;
+		subImage.layerCount = 1;
+		imageBarrier.subresourceRange = subImage;
+		imageBarrier.image = image;
+
+		VkDependencyInfo depInfo{};
+		depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		depInfo.imageMemoryBarrierCount = 1;
+		depInfo.pImageMemoryBarriers = &imageBarrier;
+
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+	}
+}
 
 void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
@@ -40,7 +72,7 @@ void VulkanEngine::DrawFrame(const uint32_t* pixelData)
 	cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 	vkBeginCommandBuffer(cmd, &cmdBeginInfo);
-	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	if (pixelData)
 	{
@@ -63,7 +95,7 @@ void VulkanEngine::DrawFrame(const uint32_t* pixelData)
 
 		vkCmdCopyBufferToImage(cmd, m_Buffer.Buffer, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	}
-	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
 	vkEndCommandBuffer(cmd);
 

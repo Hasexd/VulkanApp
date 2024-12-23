@@ -18,7 +18,6 @@
 
 #include "VkBootstrap.h"
 #include "VulkanTypes.h"
-#include "Image.h"
 
 
 
@@ -76,12 +75,13 @@ private:
 	uint32_t m_GraphicsQueueFamily = 0;
 
 	VmaAllocator m_Allocator;
-
 	AllocatedBuffer m_Buffer;
 
 	VkFence m_ImmediateFence;
 	VkCommandBuffer m_ImmediateCommandBuffer;
 	VkCommandPool m_ImmediateCommandPool;
+
+
 
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 	GLFWwindow* m_Window;
