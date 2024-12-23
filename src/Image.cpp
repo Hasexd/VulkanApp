@@ -4,8 +4,7 @@ namespace Image
 {
 	void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout)
 	{
-		VkImageMemoryBarrier2 imageBarrier{};
-		imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+		VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
 		imageBarrier.pNext = nullptr;
 
 		imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -16,30 +15,25 @@ namespace Image
 		imageBarrier.oldLayout = currentLayout;
 		imageBarrier.newLayout = newLayout;
 
-		VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+        VkImageSubresourceRange subImage{};
+        subImage.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        subImage.baseMipLevel = 0;
+        subImage.levelCount = 1;
+        subImage.baseArrayLayer = 0;
+        subImage.layerCount = 1; 
+        imageBarrier.subresourceRange = subImage;
+        imageBarrier.image = image;
 
-		VkImageSubresourceRange subImage{};
-		subImage.aspectMask = aspectMask;
-		subImage.baseMipLevel = 0;
-		subImage.levelCount = VK_REMAINING_MIP_LEVELS;
-		subImage.baseArrayLayer = 0;
-		subImage.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        VkDependencyInfo depInfo{};
+        depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        depInfo.imageMemoryBarrierCount = 1;
+        depInfo.pImageMemoryBarriers = &imageBarrier;
 
-		imageBarrier.subresourceRange = subImage;
-		imageBarrier.image = image;
-
-		VkDependencyInfo depInfo{};
-		depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		depInfo.pNext = nullptr;
-
-		depInfo.imageMemoryBarrierCount = 1;
-		depInfo.pImageMemoryBarriers = &imageBarrier;
-
-		vkCmdPipelineBarrier2(cmd, &depInfo);
+        vkCmdPipelineBarrier2(cmd, &depInfo);
 	}
 
 
-	void CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize, VkImageLayout srcLayout)
+	void CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize, VkImageLayout srcLayout, VkImageLayout dstLayout)
 	{
 		VkImageBlit2 blitRegion{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
 

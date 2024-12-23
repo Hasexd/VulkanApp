@@ -20,7 +20,7 @@ void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 void VulkanEngine::DrawFrame()
 {
 	vkWaitForFences(m_Device, 1, &GetCurrentFrame().RenderFence, true, 1000000000);
-	GetCurrentFrame().DeletionQueue.Flush();
+	GetCurrentFrame().DataDeletionQueue.Flush();
 	vkResetFences(m_Device, 1, &GetCurrentFrame().RenderFence);
 
 	uint32_t swapchainImageIndex;
@@ -40,16 +40,21 @@ void VulkanEngine::DrawFrame()
 	cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 	vkBeginCommandBuffer(cmd, &cmdBeginInfo);
-	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
-	DrawBackground(cmd);
-	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-	DrawGeometry(cmd);
-	Image::TransitionImage(cmd, m_DrawImage.Image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	Image::CopyImageToImage(cmd, m_DrawImage.Image, m_SwapchainImages[swapchainImageIndex],
-		{ m_DrawExtent.width, m_DrawExtent.height }, {m_SwapchainExtent.width, m_SwapchainExtent.height}, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+	VkBufferImageCopy region = {};
+	region.bufferOffset = 0;
+	region.bufferRowLength = 0;
+	region.bufferImageHeight = 0;
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.mipLevel = 0;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = 1;
+	region.imageOffset = { 0, 0, 0 };
+	region.imageExtent= { m_SwapchainExtent.width, m_SwapchainExtent.height, 1 };
+
+
+	vkCmdCopyBufferToImage(cmd, m_Buffer.Buffer, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
@@ -115,61 +120,6 @@ void VulkanEngine::DrawFrame()
 }
 
 
-void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
-{
-	VkRenderingAttachmentInfo colorAttachment{};
-	colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-	colorAttachment.pNext = nullptr;
-	colorAttachment.imageView = m_DrawImage.ImageView;
-	colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-	VkRenderingInfo renderInfo{};
-	renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-	renderInfo.pNext = nullptr;
-
-	renderInfo.renderArea = VkRect2D{ VkOffset2D { 0, 0 }, m_DrawExtent };
-	renderInfo.layerCount = 1;
-	renderInfo.colorAttachmentCount = 1;
-	renderInfo.pColorAttachments = &colorAttachment;
-	renderInfo.pDepthAttachment = nullptr;
-	renderInfo.pStencilAttachment = nullptr;
-
-	vkCmdBeginRendering(cmd, &renderInfo);
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_TrianglePipeline);
-
-	VkViewport viewport{};
-	viewport.x = 0;
-	viewport.y = 0;
-	viewport.width = m_DrawExtent.width;
-	viewport.height = m_DrawExtent.height;
-	viewport.minDepth = 0.f;
-	viewport.maxDepth = 1.f;
-
-	vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-	VkRect2D scissor{};
-	scissor.offset.x = 0;
-	scissor.offset.y = 0;
-	scissor.extent.width = m_DrawExtent.width;
-	scissor.extent.height = m_DrawExtent.height;
-
-	vkCmdSetScissor(cmd, 0, 1, &scissor);
-	vkCmdDraw(cmd, 3, 1, 0, 0);
-
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipeline);
-	GPUDrawPushConstants pushConstants{};
-	pushConstants.WorldMatrix = glm::mat4{ 1.f };
-	pushConstants.VertexBuffer = m_Rectangle.VertexBufferAddress;
-	vkCmdPushConstants(cmd, m_MeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
-	vkCmdBindIndexBuffer(cmd, m_Rectangle.IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
-
-	vkCmdEndRendering(cmd);
-
-}
-
 void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const
 {
 	VkRenderingAttachmentInfo colorAttachmentInfo{};
@@ -194,76 +144,50 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) c
 	vkCmdBeginRendering(cmd, &renderInfo);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 	vkCmdEndRendering(cmd);
-
 }
 
-
-
-void VulkanEngine::DrawBackground(const VkCommandBuffer& cmd)
-{
-	ComputeEffect& effect = m_BackgroundEffects[m_CurrentBackgroundEffect];
-
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.Pipeline);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
-
-	
-	vkCmdPushConstants(cmd, m_GradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.Data);
-
-	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.f), std::ceil(m_DrawExtent.height / 16.f), 1);
-
-}
 
 void VulkanEngine::Init()
 {
 	InitVulkan();
 	InitImgui();
-	InitDefaultData();
+
+
+	CalculatePixelData();
+
 	IsInitialized = true;
+}
+
+
+void VulkanEngine::CalculatePixelData()
+{
+	uint32_t size = (m_SwapchainExtent.width * m_SwapchainExtent.height * 4);
+
+	pixelData = new uint32_t[size];
+
+
+	for (uint32_t i = 0; i < size; i++)
+	{
+		pixelData[i] = 0xff0000ff;
+	}
+
+	if (ResizeRequested)
+		vmaDestroyBuffer(m_Allocator, m_Buffer.Buffer, m_Buffer.Allocation);
+
+	m_Buffer = CreateBuffer(size * 4, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+
+	void* data = m_Buffer.Allocation->GetMappedData();
+	memcpy(data, pixelData, size);
+
 }
 
 void VulkanEngine::InitVulkan()
 {
 	InitDevices();
 	InitSwapchain();
-	CreateDrawImage();
 	InitCommands();
 	InitSyncStructures();
-	InitDescriptors();
-	InitPipelines();
 }
-
-void VulkanEngine::InitDefaultData()
-{
-	std::array<Vertex, 4> rectVertices;
-
-	rectVertices[0].Position = { 0.5,-0.5, 0 };
-	rectVertices[1].Position = { 0.5,0.5, 0 };
-	rectVertices[2].Position = { -0.5,-0.5, 0 };
-	rectVertices[3].Position = { -0.5,0.5, 0 };
-
-	rectVertices[0].Color = { 0,0, 0,1 };
-	rectVertices[1].Color = { 0.5,0.5,0.5 ,1 };
-	rectVertices[2].Color = { 1,0, 0,1 };
-	rectVertices[3].Color = { 0,1, 0,1 };
-
-	std::array<uint32_t, 6> rectIndices;
-
-	rectIndices[0] = 0;
-	rectIndices[1] = 1;
-	rectIndices[2] = 2;
-
-	rectIndices[3] = 2;
-	rectIndices[4] = 1;
-	rectIndices[5] = 3;
-
-	m_Rectangle = UploadMesh(rectIndices, rectVertices);
-
-	m_MainDeletionQueue.PushFunction([&]() -> void {
-		DestroyBuffer(m_Rectangle.IndexBuffer);
-		DestroyBuffer(m_Rectangle.VertexBuffer);
-	});
-}
-
 
 void VulkanEngine::InitImgui()
 {
@@ -330,249 +254,6 @@ void VulkanEngine::InitImgui()
 		ImGui_ImplVulkan_Shutdown();
 		vkDestroyDescriptorPool(m_Device, imguiPool, nullptr);
 		});
-}
-
-
-void VulkanEngine::InitPipelines()
-{
-	VkPipelineLayoutCreateInfo computeLayoutInfo{};
-	computeLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	computeLayoutInfo.pNext = nullptr;
-	computeLayoutInfo.pSetLayouts = &m_DrawImageDescriptorLayout;
-	computeLayoutInfo.setLayoutCount = 1;
-
-	VkPushConstantRange pushConstant{};
-	pushConstant.offset = 0;
-	pushConstant.size = sizeof(ComputePushConstants);
-	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-	computeLayoutInfo.pPushConstantRanges = &pushConstant;
-	computeLayoutInfo.pushConstantRangeCount = 1;
-
-	vkCreatePipelineLayout(m_Device, &computeLayoutInfo, nullptr, &m_GradientPipelineLayout);
-
-	VkShaderModule gradientShader;
-
-	std::filesystem::path pathToGradient = "../../shaders/gradient_color.spv";
-	if (!Pipelines::LoadShaderModule(pathToGradient.string().c_str(), m_Device, &gradientShader))
-	{
-		printf("Error when building the gradient shader!");
-		return;
-	}
-
-	VkShaderModule skyShader;
-	std::filesystem::path pathToSky = "../../shaders/sky.spv";
-	if (!Pipelines::LoadShaderModule(pathToSky.string().c_str(), m_Device, &skyShader))
-	{
-		printf("Error when building the sky shader!");
-		return;
-	}
-
-	VkPipelineShaderStageCreateInfo stageInfo{};
-	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stageInfo.pNext = nullptr;
-	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageInfo.module = gradientShader;
-	stageInfo.pName = "main";
-
-	VkComputePipelineCreateInfo computePipelineCreateInfo{};
-	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computePipelineCreateInfo.pNext = nullptr;
-	computePipelineCreateInfo.layout = m_GradientPipelineLayout;
-	computePipelineCreateInfo.stage = stageInfo;
-
-	ComputeEffect gradient;
-	gradient.Layout = m_GradientPipelineLayout;
-	gradient.Name = "Gradient";
-	gradient.Data = {};
-	gradient.Data.Data1 = glm::vec4(1, 0, 0, 1);
-	gradient.Data.Data2 = glm::vec4(0, 0, 1, 1);
-
-	vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.Pipeline);
-
-	computePipelineCreateInfo.stage.module = skyShader;
-
-	ComputeEffect sky;
-	sky.Layout = m_GradientPipelineLayout;
-	sky.Name = "Sky";
-	sky.Data = {};
-	sky.Data.Data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
-	vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.Pipeline);
-
-	m_BackgroundEffects.push_back(gradient);
-	m_BackgroundEffects.push_back(sky);
-
-
-	vkDestroyShaderModule(m_Device, gradientShader, nullptr);
-	vkDestroyShaderModule(m_Device, skyShader, nullptr);
-	if (!ResizeRequested)
-	{
-		m_MainDeletionQueue.PushFunction([&]() -> void
-			{
-				vkDestroyPipelineLayout(m_Device, m_GradientPipelineLayout, nullptr);
-				vkDestroyPipeline(m_Device, sky.Pipeline, nullptr);
-				vkDestroyPipeline(m_Device, gradient.Pipeline, nullptr);
-
-			});
-	}
-
-	//Graphics Pipelines
-	InitTrianglePipeline();
-	InitMeshPipeline();
-}
-
-void VulkanEngine::InitMeshPipeline()
-{
-	VkShaderModule triangleFragShader;
-	std::filesystem::path fragPath = s_PathToShaders / "colored_triangle_frag.spv";
-	if (!Pipelines::LoadShaderModule(fragPath.string().c_str(), m_Device, &triangleFragShader))
-	{
-		printf("Error when building the triangle fragment shader");
-		return;
-	}
-
-	VkShaderModule triangleVertShader;
-	std::filesystem::path vertPath = s_PathToShaders / "colored_triangle_mesh.spv";
-	if (!Pipelines::LoadShaderModule(vertPath.string().c_str(), m_Device, &triangleVertShader))
-	{
-		printf("Error when building the triangle vertex shader");
-		return;
-	}
-
-
-	VkPushConstantRange bufferRange{};
-	bufferRange.offset = 0;
-	bufferRange.size = sizeof(GPUDrawPushConstants);
-	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.pSetLayouts = &m_DrawImageDescriptorLayout;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
-
-	vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_MeshPipelineLayout);
-
-	PipelineBuilder pipelineBuilder;
-
-	pipelineBuilder.m_PipelineLayout = m_MeshPipelineLayout;
-	pipelineBuilder.SetShaders(triangleVertShader, "main", triangleFragShader, "main");
-	pipelineBuilder.SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	pipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
-	pipelineBuilder.SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-	pipelineBuilder.SetMultisamplingNone();
-	pipelineBuilder.DisableBlending();
-	pipelineBuilder.DisableDepthtest();
-	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.ImageFormat);
-	pipelineBuilder.SetDepthFormat(VK_FORMAT_UNDEFINED);
-
-	m_MeshPipeline = pipelineBuilder.BuildPipeline(m_Device);
-
-	vkDestroyShaderModule(m_Device, triangleFragShader, nullptr);
-	vkDestroyShaderModule(m_Device, triangleVertShader, nullptr);
-
-	m_MainDeletionQueue.PushFunction([&]()-> void
-		{
-			vkDestroyPipelineLayout(m_Device, m_MeshPipelineLayout, nullptr);
-			vkDestroyPipeline(m_Device, m_MeshPipeline, nullptr);
-		});
-}
-
-void VulkanEngine::InitTrianglePipeline()
-{
-	VkShaderModule triangleFragShader;
-	std::filesystem::path fragPath = s_PathToShaders / "colored_triangle_frag.spv";
-	if (!Pipelines::LoadShaderModule(fragPath.string().c_str(), m_Device, &triangleFragShader))
-	{
-		printf("Error when building the triangle fragment shader");
-		return;
-	}
-
-	VkShaderModule triangleVertShader;
-	std::filesystem::path vertPath = s_PathToShaders / "colored_triangle_vert.spv";
-	if (!Pipelines::LoadShaderModule(vertPath.string().c_str(), m_Device, &triangleVertShader))
-	{
-		printf("Error when building the triangle vertex shader");
-		return;
-	}
-
-
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.pSetLayouts = &m_DrawImageDescriptorLayout;
-	pipelineLayoutInfo.setLayoutCount = 1;
-
-	vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_TrianglePipelineLayout);
-
-	PipelineBuilder pipelineBuilder;
-
-	pipelineBuilder.m_PipelineLayout = m_TrianglePipelineLayout;
-	pipelineBuilder.SetShaders(triangleVertShader, "main", triangleFragShader, "main");
-	pipelineBuilder.SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	pipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
-	pipelineBuilder.SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-	pipelineBuilder.SetMultisamplingNone();
-	pipelineBuilder.DisableBlending();
-	pipelineBuilder.DisableDepthtest();
-	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.ImageFormat);
-	pipelineBuilder.SetDepthFormat(VK_FORMAT_UNDEFINED);
-
-	m_TrianglePipeline = pipelineBuilder.BuildPipeline(m_Device);
-
-	vkDestroyShaderModule(m_Device, triangleFragShader, nullptr);
-	vkDestroyShaderModule(m_Device, triangleVertShader, nullptr);
-
-	m_MainDeletionQueue.PushFunction([&]()-> void
-	{
-		vkDestroyPipelineLayout(m_Device, m_TrianglePipelineLayout, nullptr);
-		vkDestroyPipeline(m_Device, m_TrianglePipeline, nullptr);
-	});
-}
-
-
-void VulkanEngine::InitDescriptors()
-{
-	std::vector<DescriptorAllocator::PoolSizeRatio> sizes =
-	{
-		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}
-	};
-
-	m_GlobalDescriptorAllocator.InitPool(m_Device, 10, sizes);
-
-	{
-		DescriptorLayoutBuilder builder;
-		builder.AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		m_DrawImageDescriptorLayout = builder.Build(m_Device, VK_SHADER_STAGE_COMPUTE_BIT);
-	}
-
-	m_DrawImageDescriptors = m_GlobalDescriptorAllocator.Allocate(m_Device, m_DrawImageDescriptorLayout);
-
-	VkDescriptorImageInfo imgInfo{};
-	imgInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	imgInfo.imageView = m_DrawImage.ImageView;
-
-	VkWriteDescriptorSet drawImageWrite{};
-	drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	drawImageWrite.pNext = nullptr;
-	drawImageWrite.dstBinding = 0;
-	drawImageWrite.dstSet = m_DrawImageDescriptors;
-	drawImageWrite.descriptorCount = 1;
-	drawImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	drawImageWrite.pImageInfo = &imgInfo;
-
-	vkUpdateDescriptorSets(m_Device, 1, &drawImageWrite, 0, nullptr);
-
-	if (!ResizeRequested)
-	{
-		m_MainDeletionQueue.PushFunction([&]() -> void
-			{
-				m_GlobalDescriptorAllocator.DestroyPool(m_Device);
-				vkDestroyDescriptorSetLayout(m_Device, m_DrawImageDescriptorLayout, nullptr);
-			});
-	}
 }
 
 void VulkanEngine::InitSyncStructures()
@@ -652,7 +333,6 @@ void VulkanEngine::InitSwapchain()
 	else
 	{
 		printf("Failed to create a swapchain, no window set");
-		return;
 	}
 
 }
@@ -716,12 +396,6 @@ void VulkanEngine::InitDevices()
 		{
 			vmaDestroyAllocator(m_Allocator);
 		});
-
-	m_MainDeletionQueue.PushFunction([&]() -> void
-		{
-			vkDestroyImageView(m_Device, m_DrawImage.ImageView, nullptr);
-			vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
-		});
 }
 
 
@@ -729,7 +403,7 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 {
 	vkb::SwapchainBuilder swapchainBuilder(m_PhysicalDevice, m_Device, m_Surface);
 	
-	m_SwapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	m_SwapchainImageFormat = VK_FORMAT_R8G8B8A8_UNORM;
 	VkSurfaceFormatKHR surfaceFormat{};
 	surfaceFormat.format = m_SwapchainImageFormat;
 	surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -738,7 +412,7 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 		swapchainBuilder.set_desired_format(surfaceFormat)
 		.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
 		.set_desired_extent(width, height)
-		.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+		.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
 		.build()
 		.value();
 
@@ -746,152 +420,6 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	m_Swapchain = vkbSwapchain.swapchain;
 	m_SwapchainImages = vkbSwapchain.get_images().value();
 	m_SwapchainImageViews = vkbSwapchain.get_image_views().value();
-}
-
-
-void VulkanEngine::CreateDrawImage()
-{
-	int width, height;
-	glfwGetWindowSize(m_Window, &width, &height);
-
-	VkExtent3D drawImageExtent{};
-	drawImageExtent.width = width;
-	drawImageExtent.height = height;
-	drawImageExtent.depth = 1;
-
-	m_DrawImage.ImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-	m_DrawImage.ImageExtent = drawImageExtent;
-	m_DrawExtent = { drawImageExtent.width, drawImageExtent.height };
-
-	VkImageUsageFlags drawImageUsageFlags{};
-	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	drawImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	drawImageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
-	drawImageUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-	VkImageCreateInfo imageCreateInfo{};
-
-	imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageCreateInfo.pNext = nullptr;
-	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageCreateInfo.format = m_DrawImage.ImageFormat;
-	imageCreateInfo.extent = m_DrawImage.ImageExtent;
-	imageCreateInfo.mipLevels = 1;
-	imageCreateInfo.arrayLayers = 1;
-	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-	//change to linear for cpu 
-	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-
-	imageCreateInfo.usage = drawImageUsageFlags;
-
-	VmaAllocationCreateInfo imageAllocInfo{};
-	imageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-	imageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-
-	vmaCreateImage(m_Allocator, &imageCreateInfo, &imageAllocInfo, &m_DrawImage.Image, &m_DrawImage.Allocation, nullptr);
-
-	VkImageViewCreateInfo imageViewInfo{};
-	imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	imageViewInfo.pNext = nullptr;
-	imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	imageViewInfo.image = m_DrawImage.Image;
-	imageViewInfo.format = m_DrawImage.ImageFormat;
-	imageViewInfo.subresourceRange.baseMipLevel = 0;
-	imageViewInfo.subresourceRange.levelCount = 1;
-	imageViewInfo.subresourceRange.baseArrayLayer = 0;
-	imageViewInfo.subresourceRange.layerCount = 1;
-	imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-
-	vkCreateImageView(m_Device, &imageViewInfo, nullptr, &m_DrawImage.ImageView);
-}
-
-void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
-{
-	vkResetFences(m_Device, 1, &m_ImmediateFence);
-	vkResetCommandBuffer(m_ImmediateCommandBuffer, 0);
-
-	VkCommandBuffer cmd = m_ImmediateCommandBuffer;
-
-	VkCommandBufferBeginInfo cmdBeginInfo{};
-	cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	cmdBeginInfo.pNext = nullptr;
-	cmdBeginInfo.pInheritanceInfo = nullptr;
-	cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	vkBeginCommandBuffer(cmd, &cmdBeginInfo);
-	function(cmd);
-	vkEndCommandBuffer(cmd);
-
-	VkCommandBufferSubmitInfo cmdSubmitInfo{};
-	cmdSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-	cmdSubmitInfo.pNext = nullptr;
-	cmdSubmitInfo.commandBuffer = cmd;
-	cmdSubmitInfo.deviceMask = 0;
-
-	VkSubmitInfo2 submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-	submitInfo.pNext = nullptr;
-
-	submitInfo.waitSemaphoreInfoCount = 0;
-	submitInfo.pWaitSemaphoreInfos = nullptr;
-
-	submitInfo.signalSemaphoreInfoCount = 0;
-	submitInfo.pSignalSemaphoreInfos = nullptr;
-
-	submitInfo.commandBufferInfoCount = 1;
-	submitInfo.pCommandBufferInfos = &cmdSubmitInfo;
-
-
-	vkQueueSubmit2(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
-	vkWaitForFences(m_Device, 1, &m_ImmediateFence, true, 9999999999);
-}
-
-GPUMeshBuffers VulkanEngine::UploadMesh(const std::span<uint32_t>& indices, const std::span<Vertex>& vertices)
-{
-	const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
-	const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
-
-	GPUMeshBuffers newSurface{};
-
-	newSurface.VertexBuffer = CreateBuffer(vertexBufferSize, 
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
-
-	VkBufferDeviceAddressInfo deviceAddressInfo{};
-	deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-	deviceAddressInfo.buffer = newSurface.VertexBuffer.Buffer;
-
-	newSurface.VertexBufferAddress = vkGetBufferDeviceAddress(m_Device, &deviceAddressInfo);
-
-	newSurface.IndexBuffer = CreateBuffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
-
-	AllocatedBuffer staging = CreateBuffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-	void* data = staging.Allocation->GetMappedData();
-
-	memcpy(data, vertices.data(), vertexBufferSize);
-	memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
-
-	ImmediateSubmit([&](VkCommandBuffer cmd) -> void
-	{
-		VkBufferCopy vertexCopy{ 0 };
-		vertexCopy.dstOffset = 0;
-		vertexCopy.srcOffset = 0;
-		vertexCopy.size = vertexBufferSize;
-
-		vkCmdCopyBuffer(cmd, staging.Buffer, newSurface.VertexBuffer.Buffer, 1, &vertexCopy);
-
-		VkBufferCopy indexCopy{ 0 };
-		indexCopy.dstOffset = 0;
-		indexCopy.srcOffset = vertexBufferSize;
-		indexCopy.size = indexBufferSize;
-
-		vkCmdCopyBuffer(cmd, staging.Buffer, newSurface.IndexBuffer.Buffer, 1, &indexCopy);
-	});
-	DestroyBuffer(staging);
-
-	return newSurface;
 }
 
 
@@ -950,7 +478,6 @@ void VulkanEngine::Cleanup()
 			vkDestroySemaphore(m_Device, m_Frames[i].SwapchainSemaphore, nullptr);
 		}
 		m_MainDeletionQueue.Flush();
-
 
 		DestroySwapchain();
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);

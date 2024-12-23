@@ -36,36 +36,7 @@ struct FrameData
 	VkSemaphore RenderSemaphore;
 	VkFence RenderFence;
 
-	DeletionQueue DeletionQueue;
-};
-
-
-
-struct AllocatedImage
-{
-	VkImage Image;
-	VkImageView ImageView;
-	VmaAllocation Allocation;
-	VkExtent3D ImageExtent;
-	VkFormat ImageFormat;
-};
-
-
-struct ComputePushConstants
-{
-	glm::vec4 Data1;
-	glm::vec4 Data2;
-	glm::vec4 Data3;
-	glm::vec4 Data4;
-};
-
-struct ComputeEffect
-{
-	const char* Name;
-	VkPipeline Pipeline;
-	VkPipelineLayout Layout;
-
-	ComputePushConstants Data;
+	DeletionQueue DataDeletionQueue;
 };
 
 
@@ -74,27 +45,4 @@ struct AllocatedBuffer
 	VkBuffer Buffer;
 	VmaAllocation Allocation;
 	VmaAllocationInfo Info;
-};
-
-
-struct Vertex
-{
-	float UvX, UvY;
-	glm::vec3 Position;
-	glm::vec3 Normal;
-	glm::vec4 Color;
-};
-
-
-struct GPUMeshBuffers
-{
-	AllocatedBuffer IndexBuffer;
-	AllocatedBuffer VertexBuffer;
-	VkDeviceAddress VertexBufferAddress;
-};
-
-struct GPUDrawPushConstants
-{
-	glm::mat4 WorldMatrix;
-	VkDeviceAddress VertexBuffer;
 };
