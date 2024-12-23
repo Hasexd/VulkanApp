@@ -10,7 +10,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vk_mem_alloc.h>
-#include <glm/glm.hpp>
+#include <glm.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>

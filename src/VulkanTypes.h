@@ -6,7 +6,7 @@
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
-#include <glm/glm.hpp>
+#include <glm.hpp>
 
 struct DeletionQueue
 {
