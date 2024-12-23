@@ -128,6 +128,11 @@ project "VulkanRayTracer"
         "vendors/vk-bootstrap/include"
     }
 
+     vpaths {
+         ["Header Files"] = {"src/**.h"},
+         ["Source Files"] = {"src/**.cpp"}
+     }
+
     filter "system:windows"
         systemversion "latest"
         links { "$(VULKAN_SDK)/Lib/vulkan-1.lib" } -- Link Vulkan SDK library
