@@ -8,7 +8,8 @@ static void ErrorCallback(int error, const char* description)
 }
 
 
-Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable)
+Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable):
+	m_Renderer(width, height)
 {
 	Init(width, height, title, resizable);
 }
@@ -26,9 +27,7 @@ void Application::Run()
 		if (m_Engine.ResizeRequested)
 		{
 			m_Engine.OnWindowResize(m_Width, m_Height);
-
-			delete[] m_PixelData;
-			m_PixelData = new uint32_t[m_Width * m_Height];
+			m_Renderer.Resize(m_Width, m_Height);
 		}
 
 		ImGui_ImplVulkan_NewFrame();
@@ -36,15 +35,13 @@ void Application::Run()
 		ImGui::NewFrame();
 
 		ImGui::Begin("Information");
-		ImGui::Text("Rendering took: %.5fms", m_LastRenderTime);
+		ImGui::Text("Rendering took: %.3fms", m_LastRenderTime);
 		ImGui::End();
 
 		ImGui::Render();
 
 		Render();
-		m_Engine.DrawFrame(m_PixelData);
-
-		
+		m_Engine.DrawFrame(m_Renderer.GetData());
 	}
 
 }
@@ -53,11 +50,7 @@ void Application::Run()
 void Application::Render()
 {
 	auto startTime = std::chrono::high_resolution_clock::now();
-	for (uint32_t i = 0; i < m_Width * m_Height; i++)
-	{
-		m_PixelData[i] = Random::UInt();
-		m_PixelData[i] |= 0xff000000;
-	}
+	m_Renderer.Render();
 	auto endTime = std::chrono::high_resolution_clock::now();
 
 	std::chrono::duration<float, std::milli> duration = endTime - startTime;
@@ -96,8 +89,6 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 				instance->m_Height = height;
 			}
 		});
-
-	m_PixelData = new uint32_t[m_Width * m_Height];
 }
 
 void Application::Cleanup()
