@@ -24,7 +24,9 @@ void Application::Run()
 	{
 		glfwPollEvents();
 		if (m_Engine.ResizeRequested)
+		{
 			m_Engine.OnWindowResize(m_Width, m_Height);
+		}
 
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();

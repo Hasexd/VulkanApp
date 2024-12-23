@@ -32,6 +32,7 @@ public:
 	void Init();
 	void DrawFrame();
 	void OnWindowResize(uint32_t width, uint32_t height);
+	void SetPixelData(uint32_t* pixelData) { m_PixelData = pixelData; };
 
 	void Cleanup();
 public:
@@ -39,9 +40,8 @@ public:
 	bool IsInitialized = false;
 private:
 
-	void CalculatePixelData();
-
-	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;
+	void RecreateBuffer();
+	void RecreateSwapchain(uint32_t width, uint32_t height);
 
 	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const;
 	void InitVulkan();
@@ -54,8 +54,11 @@ private:
 	void DestroySwapchain();
 	void DestroyBuffer(const AllocatedBuffer& buffer) const;
 
+
+	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	FrameData& GetCurrentFrame();
 private:
+	uint32_t* m_PixelData;
 	VkInstance m_Instance;
 	VkPhysicalDevice m_PhysicalDevice;
 	VkDevice m_Device;
@@ -87,6 +90,8 @@ private:
 
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 	GLFWwindow* m_Window;
+
+	VkDescriptorPool m_ImGuiPool;
 
 	DeletionQueue m_MainDeletionQueue;
 

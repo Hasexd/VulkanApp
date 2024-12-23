@@ -11,8 +11,8 @@ void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 	if (ResizeRequested)
 	{
 		vkDeviceWaitIdle(m_Device);
-		DestroySwapchain();
-		CreateSwapchain(width, height);
+		RecreateSwapchain(width, height);
+		RecreateBuffer();
 		ResizeRequested = false;
 	}
 }
@@ -40,25 +40,31 @@ void VulkanEngine::DrawFrame()
 	cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 	vkBeginCommandBuffer(cmd, &cmdBeginInfo);
-	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	VkBufferImageCopy region = {};
-	region.bufferOffset = 0;
-	region.bufferRowLength = 0;
-	region.bufferImageHeight = 0;
-	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.imageSubresource.mipLevel = 0;
-	region.imageSubresource.baseArrayLayer = 0;
-	region.imageSubresource.layerCount = 1;
-	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent= { m_SwapchainExtent.width, m_SwapchainExtent.height, 1 };
+	
+	if (m_PixelData)
+	{
+		void* data = m_Buffer.Allocation->GetMappedData();
+		memcpy(data, m_PixelData, m_SwapchainExtent.width * m_SwapchainExtent.height * 4);
 
 
-	vkCmdCopyBufferToImage(cmd, m_Buffer.Buffer, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-	Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-	DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
+		VkBufferImageCopy region = {};
+		region.bufferOffset = 0;
+		region.bufferRowLength = 0;
+		region.bufferImageHeight = 0;
+		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.imageSubresource.mipLevel = 0;
+		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.layerCount = 1;
+		region.imageOffset = { 0, 0, 0 };
+		region.imageExtent = { m_SwapchainExtent.width, m_SwapchainExtent.height, 1 };
 
+
+		vkCmdCopyBufferToImage(cmd, m_Buffer.Buffer, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		Image::TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
+	}
 
 	vkEndCommandBuffer(cmd);
 
@@ -152,33 +158,29 @@ void VulkanEngine::Init()
 	InitVulkan();
 	InitImgui();
 
+	uint32_t size = m_SwapchainExtent.width * m_SwapchainExtent.height * 4;
 
-	CalculatePixelData();
+	m_PixelData = new uint32_t[size];
+
+	for (uint32_t i = 0; i < size; i++)
+		m_PixelData[i] = 0xff0000ff;
 
 	IsInitialized = true;
 }
 
-
-void VulkanEngine::CalculatePixelData()
+void VulkanEngine::RecreateBuffer()
 {
 	uint32_t size = (m_SwapchainExtent.width * m_SwapchainExtent.height * 4);
+	vmaDestroyBuffer(m_Allocator, m_Buffer.Buffer, m_Buffer.Allocation);
 
-	pixelData = new uint32_t[size];
+	m_Buffer = CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+}
 
 
-	for (uint32_t i = 0; i < size; i++)
-	{
-		pixelData[i] = 0xff0000ff;
-	}
-
-	if (ResizeRequested)
-		vmaDestroyBuffer(m_Allocator, m_Buffer.Buffer, m_Buffer.Allocation);
-
-	m_Buffer = CreateBuffer(size * 4, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-
-	void* data = m_Buffer.Allocation->GetMappedData();
-	memcpy(data, pixelData, size);
-
+void VulkanEngine::RecreateSwapchain(uint32_t width, uint32_t height)
+{
+	DestroySwapchain();
+	CreateSwapchain(width, height);
 }
 
 void VulkanEngine::InitVulkan()
@@ -187,6 +189,7 @@ void VulkanEngine::InitVulkan()
 	InitSwapchain();
 	InitCommands();
 	InitSyncStructures();
+	m_Buffer = CreateBuffer(sizeof(uint32_t) * m_SwapchainExtent.width * m_SwapchainExtent.height, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 }
 
 void VulkanEngine::InitImgui()
@@ -210,8 +213,7 @@ void VulkanEngine::InitImgui()
 	poolInfo.poolSizeCount = (uint32_t)std::size(poolSizes);
 	poolInfo.pPoolSizes = poolSizes;
 
-	VkDescriptorPool imguiPool;
-	vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &imguiPool);
+	vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_ImGuiPool);
 
 
 	ImGui::CreateContext();
@@ -228,7 +230,7 @@ void VulkanEngine::InitImgui()
 	initInfo.Device = m_Device;
 	initInfo.QueueFamily = m_GraphicsQueueFamily;
 	initInfo.Queue = m_GraphicsQueue;
-	initInfo.DescriptorPool = imguiPool;
+	initInfo.DescriptorPool = m_ImGuiPool;
 	initInfo.MinImageCount = 3;
 	initInfo.ImageCount = 3;
 	initInfo.UseDynamicRendering = true;
@@ -250,9 +252,9 @@ void VulkanEngine::InitImgui()
 
 	ImGui_ImplVulkan_CreateFontsTexture();
 
-	m_MainDeletionQueue.PushFunction([&]() {
-		ImGui_ImplVulkan_Shutdown();
-		vkDestroyDescriptorPool(m_Device, imguiPool, nullptr);
+	m_MainDeletionQueue.PushFunction([&]() 
+		{
+			ImGui_ImplVulkan_Shutdown();
 		});
 }
 
@@ -423,7 +425,7 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 }
 
 
-AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 {
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -442,6 +444,14 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
 		printf("Error when creating a buffer!");
 	}
 
+	if (!ResizeRequested)
+	{
+		m_MainDeletionQueue.PushFunction([&]() -> void
+			{
+				vmaDestroyBuffer(m_Allocator, m_Buffer.Buffer, m_Buffer.Allocation);
+			});
+	}
+	
 	return newBuffer;
 }
 
@@ -481,6 +491,7 @@ void VulkanEngine::Cleanup()
 
 		DestroySwapchain();
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+		vkDestroyDescriptorPool(m_Device, m_ImGuiPool, nullptr);
 		vkDestroyDevice(m_Device, nullptr);
 		vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger, nullptr);
 		vkDestroyInstance(m_Instance, nullptr);
