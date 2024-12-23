@@ -5,7 +5,7 @@
 *.userosscache
 *.sln.docstates
 *.sln
-*.vcxproj
+*.vcxproj.filters
 
 # CMake build artifacts
 out/
