@@ -7,6 +7,8 @@
 *.sln
 *.vcxproj.filters
 
+*.vcxproj
+
 # CMake build artifacts
 out/
 CMakeSettings.json
