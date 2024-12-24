@@ -1,4 +1,4 @@
-#include "Sphere.h"
+	#include "Sphere.h"
 
 
 Sphere::Sphere(const glm::vec3& position, float radius):
@@ -8,11 +8,17 @@ Sphere::Sphere(const glm::vec3& position, float radius):
 }
 
 
-bool Sphere::Intersects(const Ray& ray)
+bool Sphere::Intersects(const Ray& ray) const
 {
-	float determinant = std::pow((ray.Origin.x + ray.Direction.x * ray.Scalar - Position.x), 2)
-	+ std::pow((ray.Origin.y + ray.Direction.y * ray.Scalar - Position.y), 2) + 
-		std::pow(ray.Origin.z + ray.Direction.z * ray.Scalar - Position.z, 2) - Radius * Radius;
+	float a = glm::dot(ray.Direction, ray.Direction);
+	float b = 2.f * glm::dot(ray.Origin, ray.Direction);
+	float c = glm::dot(ray.Origin, ray.Origin) - Radius * Radius;
+
+	float discriminant = b * b - 4.f * a * c;
+
+	if (discriminant >= 0)
+		return true;
+
 
 	return false;
 }

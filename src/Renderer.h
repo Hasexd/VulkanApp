@@ -5,6 +5,7 @@
 
 #include "Random.h"
 #include "Ray.h"
+#include "Sphere.h"
 
 class Renderer
 {
@@ -18,5 +19,7 @@ public:
 	uint32_t* GetData() const;
 private:
 	uint32_t m_Width, m_Height;
+	float m_AspectRatio;
 	uint32_t* m_PixelData;
+	Sphere sphere;
 };
