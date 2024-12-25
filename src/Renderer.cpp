@@ -50,27 +50,71 @@ void Renderer::Render()
 
 glm::vec4 Renderer::PerPixel(const glm::vec2& coord) const
 {
-	glm::vec3 rayOrigin(0.f, 0.f, 1.0f);
-	glm::vec3 rayDirection(coord.x * m_AspectRatio * m_Scalar, coord.y * m_Scalar, -1.f);
-	rayDirection = glm::normalize(rayDirection);
+    float scalar = glm::tan(glm::radians(m_Camera.GetFieldOfView()) / 2);
+    glm::vec3 rayDirection(
+        coord.x * m_AspectRatio * scalar,
+        coord.y * scalar,
+        -1.0f
+    );
 
-	Ray ray(rayOrigin, rayDirection);
+    rayDirection = glm::normalize(
+        rayDirection.x * m_Camera.GetRight() +
+        rayDirection.y * m_Camera.GetUp() +
+        rayDirection.z * m_Camera.GetDirection()
+    );
 
-	if (glm::vec3 hitNear, hitFar; sphere.Intersects(ray,hitNear, hitFar))
-	{
-		glm::vec3 nearNormal = glm::normalize(hitNear - sphere.Position);
+    Ray ray(m_Camera.GetPosition(), rayDirection);
 
-		float angle = glm::max(glm::dot(nearNormal, -lightDir), 0.f);
+    if (glm::vec3 hitNear, hitFar; sphere.Intersects(ray, hitNear, hitFar))
+    {
+        float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
+        float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
 
+        glm::vec3 hitPoint;
+        if (distanceToNear > 0.0f)
+        {
+            hitPoint = hitNear;
+        }
+        else if (distanceToFar > 0.0f)
+        {
+            hitPoint = hitFar;
+        }
+        else
+        {
+            return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        }
 
-		glm::vec3 sphereColor = nearNormal * angle;
-		return glm::vec4(sphereColor, 1.f);
-	}
-
-	return glm::vec4(0.f, 0.f, 0.f ,1.f);
-
+        glm::vec3 normal = glm::normalize(hitPoint - sphere.Position);
+        float angle = glm::max(glm::dot(normal, -lightDir), 0.f);
+        glm::vec3 sphereColor = normal * angle;
+        return glm::vec4(sphereColor, 1.f);
+    }
+    return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
+void Renderer::MoveCamera(const glm::vec3& movement, double deltaTime)
+{
+	m_Camera.Move(movement, deltaTime);
+}
+
+void Renderer::RotateCamera(double xPos, double yPos, double deltaTime)
+{
+	if (m_FirstMove)
+	{
+		m_LastX = xPos;
+		m_LastY = yPos;
+		m_FirstMove = false;
+		return;
+	}
+
+	double xOffset = xPos - m_LastX;
+	double yOffset = yPos - m_LastY;
+
+	m_LastX = xPos;
+	m_LastY = yPos;
+
+	m_Camera.Rotate(xOffset, yOffset, deltaTime);
+}
 
 uint32_t* Renderer::GetData() const
 {

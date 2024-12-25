@@ -21,8 +21,31 @@ Application::~Application()
 
 void Application::Run()
 {
+	double lastFrame = glfwGetTime();
+	Camera* camera = m_Renderer.GetCamera();
+
 	while (!glfwWindowShouldClose(m_Window))
 	{
+		double currentFrame = glfwGetTime();
+		m_DeltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
+
+		glm::vec3 movement(0.0f);
+
+		if (glfwGetKey(m_Window, GLFW_KEY_W) == GLFW_PRESS)
+			movement -= camera->GetDirection();
+		if (glfwGetKey(m_Window, GLFW_KEY_S) == GLFW_PRESS)
+			movement += camera->GetDirection();
+		if (glfwGetKey(m_Window, GLFW_KEY_A) == GLFW_PRESS)
+			movement -= camera->GetRight();
+		if (glfwGetKey(m_Window, GLFW_KEY_D) == GLFW_PRESS)
+			movement += camera->GetRight();
+
+		if (glm::length(movement) > 0.0f)
+			movement = glm::normalize(movement);
+
+		m_Renderer.MoveCamera(movement, m_DeltaTime);
+
 		glfwPollEvents();
 		if (m_Engine.ResizeRequested)
 		{
@@ -43,7 +66,6 @@ void Application::Run()
 		Render();
 		m_Engine.DrawFrame(m_Renderer.GetData());
 	}
-
 }
 
 
@@ -89,6 +111,20 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 				instance->m_Height = height;
 			}
 		});
+
+	if (glfwRawMouseMotionSupported())
+		glfwSetInputMode(m_Window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+
+	glfwSetInputMode(m_Window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+	glfwSetCursorPosCallback(m_Window, [](GLFWwindow* window, double xpos, double ypos) -> void
+		{
+			Application* instance = static_cast<Application*>(glfwGetWindowUserPointer(window));
+
+			instance->m_Renderer.RotateCamera(xpos, ypos, instance->m_DeltaTime);
+		});
+
+
 }
 
 void Application::Cleanup()

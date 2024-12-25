@@ -3,6 +3,7 @@
 
 #include <glm.hpp>
 
+#include "Camera.h"
 #include "Random.h"
 #include "Ray.h"
 #include "Sphere.h"
@@ -15,8 +16,12 @@ public:
 
 	void Render();
 	glm::vec4 PerPixel(const glm::vec2& coord) const;
-
 	uint32_t* GetData() const;
+
+	void MoveCamera(const glm::vec3& movement, double deltaTime);
+	void RotateCamera(double xPos, double yPos, double deltaTime);
+
+	Camera* GetCamera() { return &m_Camera; }
 private:
 	uint32_t m_Width, m_Height;
 	uint32_t* m_PixelData;
@@ -24,8 +29,10 @@ private:
 	Sphere sphere;
 
 	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, 1.f, -1.f));
-
 	float m_AspectRatio;
-	float m_Scalar = glm::tan(glm::radians(100.f) / 2);
+
+	Camera m_Camera;
+	double m_LastX = 0.f, m_LastY = 0.f;
+	bool m_FirstMove = true;
 
 };

@@ -27,4 +27,5 @@ private:
 	VulkanEngine m_Engine;
 
 	float m_LastRenderTime;
+	double m_DeltaTime;
 };
