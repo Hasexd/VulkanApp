@@ -124,9 +124,6 @@ project "VulkanRayTracer"
         "ImGui",
         "vk-bootstrap"
     }
-    libdirs{
-        "vendors/vk-bootstrap/include"
-    }
 
      vpaths {
          ["Header Files"] = {"src/**.h"},

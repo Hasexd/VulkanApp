@@ -12,16 +12,23 @@ if not exist %PREMAKE% (
     exit /b 1
 )
 
+copy /y premake\premake5-windows.lua premake5.lua
+
 REM Run Premake to generate project files
 echo Running Premake to generate project files...
 %PREMAKE% vs2022
 
+
 REM Check for errors during execution
 if %errorlevel% neq 0 (
     echo Error: Premake failed to generate project files.
+    del premake5.lua
     pause
     exit /b %errorlevel%
 )
+
+del premake5.lua
+
 
 echo Premake completed successfully!
 pause
