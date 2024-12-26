@@ -23,7 +23,7 @@ private:
 	float m_Yaw = 0.f, m_Pitch = 0.f;
 	float m_Sensitivity = 1.5f;
 	float m_FieldOfView = 90.f;
-	float m_Speed = 1.f;
+	float m_Speed = 3.f;
 
 	static constexpr glm::vec3 s_WorldUp = { 0.f, -1.f, 0.f };
 

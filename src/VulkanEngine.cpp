@@ -1,6 +1,7 @@
 #include "VulkanEngine.h"
 
 #define VMA_IMPLEMENTATION
+#include <regex>
 #include <vk_mem_alloc.h>
 
 
@@ -95,8 +96,9 @@ void VulkanEngine::DrawFrame(const uint32_t* pixelData)
 
 		vkCmdCopyBufferToImage(cmd, m_Buffer.Buffer, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	}
-	TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	DrawImgui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
+	TransitionImage(cmd, m_SwapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	vkEndCommandBuffer(cmd);
 
 	VkCommandBufferSubmitInfo cmdSubmitInfo{};

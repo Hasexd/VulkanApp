@@ -87,19 +87,17 @@ glm::vec4 Renderer::PerPixel(const glm::vec2& coord) const
 			}
 			else
 			{
-				return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+				return { 0.0f, 0.0f, 0.0f, 1.0f };
 			}
 
 			glm::vec3 normal = glm::normalize(hitPoint - object->GetPosition());
 			float angle = glm::max(glm::dot(normal, -lightDir), 0.f);
-
 			glm::vec3 sphereColor = object->GetColor() * angle;
 
-			return glm::vec4(sphereColor, 1.f);
+			return { sphereColor, 1.f };
 		}
 	}
-    
-    return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	return { 0.0f, 0.0f, 0.0f, 1.0f };
 }
 
 void Renderer::MoveCamera(const glm::vec3& movement, double deltaTime)
