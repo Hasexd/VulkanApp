@@ -5,6 +5,9 @@ workspace "VulkanRayTracer"
     startproject "VulkanRayTracer"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
+vulkan = os.getenv("VULKAN_SDK")
+
+print(vulkan .. "/include")
 
 -- GLFW Vendor
 project "GLFW"
@@ -55,7 +58,7 @@ project "vk-bootstrap"
     }
     includedirs{
         "vendors/vk-bootstrap/include",
-        "$(VULKAN_SDK)/Include"
+        vulkan .. "/include"
     }
 
     filter "configurations:Debug"
@@ -81,7 +84,7 @@ project "ImGui"
 
     includedirs{
         "vendors/glfw/include",
-        "$(VULKAN_SDK)/Include"
+        vulkan .. "/include"
     }
 
     filter "configurations:Debug"
@@ -115,7 +118,7 @@ project "VulkanRayTracer"
         "vendors/vk-bootstrap/include",
         "vendors/VulkanMemoryAllocator/include",
         "vendors/imgui",
-        "$(VULKAN_SDK)/Include"
+        vulkan .. "/include"
 
     }
 
@@ -132,7 +135,7 @@ project "VulkanRayTracer"
 
     filter "system:windows"
         systemversion "latest"
-        links { "$(VULKAN_SDK)/Lib/vulkan-1" } -- Link Vulkan SDK library
+        links { vulkan .. "/lib/vulkan-1" } -- Link Vulkan SDK library
 
     filter "configurations:Debug"
         runtime "Debug"
