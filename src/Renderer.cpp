@@ -13,10 +13,14 @@ static uint32_t ConvertToRGBA(const glm::vec4 color)
 }
 
 
-Renderer::Renderer(uint32_t width, uint32_t height):
-	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[width * height]),
-	sphere({ 0, 0, 0 }, 0.5f, glm::vec4(1.f, 1.f, 0.f, 1))
-{}
+Renderer::Renderer(uint32_t width, uint32_t height) :
+	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[width * height])
+{
+	m_Objects.reserve(2);
+
+	m_Objects.push_back(new Sphere({0.f, 0.f, -1.f}, {1.f, 0.f, 1.f}, 3.f));
+	m_Objects.push_back(new Sphere({ 3.f, 4.f, -1.f }, { 0.f, 0.f, 1.f }, 2.f));
+}
 
 
 void Renderer::Resize(uint32_t width, uint32_t height)
@@ -65,30 +69,36 @@ glm::vec4 Renderer::PerPixel(const glm::vec2& coord) const
 
     Ray ray(m_Camera.GetPosition(), rayDirection);
 
-    if (glm::vec3 hitNear, hitFar; sphere.Intersects(ray, hitNear, hitFar))
-    {
-        float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
-        float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
+	for (const auto& object : m_Objects)
+	{
+		if (glm::vec3 hitNear, hitFar; object->Intersects(ray, hitNear, hitFar))
+		{
+			float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
+			float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
 
-        glm::vec3 hitPoint;
-        if (distanceToNear > 0.0f)
-        {
-            hitPoint = hitNear;
-        }
-        else if (distanceToFar > 0.0f)
-        {
-            hitPoint = hitFar;
-        }
-        else
-        {
-            return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-        }
+			glm::vec3 hitPoint;
+			if (distanceToNear > 0.0f)
+			{
+				hitPoint = hitNear;
+			}
+			else if (distanceToFar > 0.0f)
+			{
+				hitPoint = hitFar;
+			}
+			else
+			{
+				return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+			}
 
-        glm::vec3 normal = glm::normalize(hitPoint - sphere.Position);
-        float angle = glm::max(glm::dot(normal, -lightDir), 0.f);
-        glm::vec3 sphereColor = normal * angle;
-        return glm::vec4(sphereColor, 1.f);
-    }
+			glm::vec3 normal = glm::normalize(hitPoint - object->GetPosition());
+			float angle = glm::max(glm::dot(normal, -lightDir), 0.f);
+
+			glm::vec3 sphereColor = object->GetColor() * angle;
+
+			return glm::vec4(sphereColor, 1.f);
+		}
+	}
+    
     return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 }
 

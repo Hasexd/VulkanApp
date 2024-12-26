@@ -1,11 +1,16 @@
 #pragma once
+
 #include <cstdint>
+#include <vector>
+#include <memory>
+
 
 #include <glm.hpp>
 
 #include "Camera.h"
 #include "Random.h"
 #include "Ray.h"
+#include "Object.h"
 #include "Sphere.h"
 
 class Renderer
@@ -26,7 +31,7 @@ private:
 	uint32_t m_Width, m_Height;
 	uint32_t* m_PixelData;
 
-	Sphere sphere;
+	std::vector<Object*> m_Objects;
 
 	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, 1.f, -1.f));
 	float m_AspectRatio;

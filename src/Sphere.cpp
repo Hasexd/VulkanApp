@@ -1,20 +1,20 @@
 	#include "Sphere.h"
 
 
-Sphere::Sphere(const glm::vec3& position, float radius, const glm::vec4& color):
-	Position(position), Radius(radius), Color(color)
+Sphere::Sphere(const glm::vec3& position, const glm::vec3& color, float radius):
+	Object(position, color), m_Radius(radius)
 {
 	
 }
 
-;
+
 bool Sphere::Intersects(const Ray& ray, glm::vec3& outHitNear, glm::vec3& outHitFar) const
 {
-	glm::vec3 oc = ray.Origin - Position;
+	glm::vec3 oc = ray.Origin - m_Position;
 
 	float a = glm::dot(ray.Direction, ray.Direction);
 	float b = 2.f * glm::dot(oc, ray.Direction);
-	float c = glm::dot(oc, oc) - Radius * Radius;
+	float c = glm::dot(oc, oc) - m_Radius * m_Radius;
 
 	float discriminant = b * b - 4.f * a * c;
 
