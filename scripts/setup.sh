@@ -1,5 +1,10 @@
 #!/usr/bin/bash
 
+echo "Installing required packages..."
+sudo apt-get update
+sudo apt-get install -y libvulkan-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+
+
 cd ..
 
 PREMAKE="premake/premake5"

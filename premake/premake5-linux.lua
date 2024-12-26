@@ -7,8 +7,6 @@ workspace "VulkanRayTracer"
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 vulkan = os.getenv("VULKAN_SDK")
 
-print(vulkan .. "/include")
-
 -- GLFW Vendor
 project "GLFW"
     location "vendors/glfw"
@@ -19,17 +17,27 @@ project "GLFW"
     targetdir ("bin/target/" .. outputdir .. "/%{prj.name}")
     objdir ("bin/obj/" .. outputdir .. "/%{prj.name}")
 
-    files {
-        "vendors/glfw/include/GLFW/**.h",
-        "vendors/glfw/src/**.c"
-    }
-
-    filter "system:windows"
+    filter "system:linux"
+    	pic "On"
         systemversion "latest"
 
+    files {
+            "vendors/glfw/src/**.c"
+        }
+
         defines { 
-            "_GLFW_WIN32",
+            "_GLFW_X11",
             "_CRT_SECURE_NO_WARNINGS"
+        }
+        
+        links {
+            "dl",
+            "pthread",
+            "X11",
+            "Xrandr",
+            "Xinerama",
+            "Xcursor",
+            "Xext"
         }
 
     filter "configurations:Debug"
@@ -133,9 +141,9 @@ project "VulkanRayTracer"
          ["Source Files"] = {"src/**.cpp"}
      }
 
-    filter "system:windows"
+    filter "system:linux"
         systemversion "latest"
-        links { vulkan .. "/lib/vulkan-1" } -- Link Vulkan SDK library
+        links { "vulkan" } -- Link Vulkan SDK library
 
     filter "configurations:Debug"
         runtime "Debug"
