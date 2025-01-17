@@ -12,7 +12,7 @@ struct DeletionQueue
 {
 	void PushFunction(std::function<void()>&& function)
 	{
-		Deletors.push_back(function);
+		Deletors.push_back(std::move(function));
 	}
 
 	void Flush()

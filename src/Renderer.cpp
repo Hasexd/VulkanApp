@@ -14,7 +14,7 @@ static uint32_t ConvertToRGBA(const glm::vec4 color)
 
 
 Renderer::Renderer(uint32_t width, uint32_t height) :
-	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[width * height])
+	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[m_Width * m_Height])
 {
 	m_Objects.reserve(2);
 
