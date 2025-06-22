@@ -103,8 +103,7 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 	glfwSetWindowUserPointer(m_Window, this);
 	glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height) -> void
 		{
-			auto* instance = static_cast<Application*>(glfwGetWindowUserPointer(window));
-			if (instance)
+			if (const auto instance = static_cast<Application*>(glfwGetWindowUserPointer(window)))
 			{
 				instance->m_Engine.ResizeRequested = true;
 				instance->m_Width = width;
@@ -119,7 +118,7 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 
 	glfwSetCursorPosCallback(m_Window, [](GLFWwindow* window, double xpos, double ypos) -> void
 		{
-			Application* instance = static_cast<Application*>(glfwGetWindowUserPointer(window));
+			const auto instance = static_cast<Application*>(glfwGetWindowUserPointer(window));
 
 			instance->m_Renderer.RotateCamera(xpos, ypos, instance->m_DeltaTime);
 		});

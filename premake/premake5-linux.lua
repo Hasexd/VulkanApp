@@ -136,11 +136,6 @@ project "VulkanRayTracer"
         "vk-bootstrap"
     }
 
-     vpaths {
-         ["Header Files"] = {"src/**.h"},
-         ["Source Files"] = {"src/**.cpp"}
-     }
-
     filter "system:linux"
         systemversion "latest"
         links { "vulkan" } -- Link Vulkan SDK library

@@ -109,6 +109,7 @@ project "VulkanRayTracer"
         "src/**.cpp"
     }
 
+
     includedirs {
         "vendors/glfw/include",
         "vendors/glm",
@@ -126,6 +127,7 @@ project "VulkanRayTracer"
     }
 
      vpaths {
+         ["Vulkan"] = {"src/VulkanEngine.h", "src/VulkanEngine.cpp", "src/VulkanTypes.h"},
          ["Header Files"] = {"src/**.h"},
          ["Source Files"] = {"src/**.cpp"}
      }

@@ -1,15 +1,17 @@
 #include "Renderer.h"
 
-
-static uint32_t ConvertToRGBA(const glm::vec4 color)
+namespace 
 {
-	uint8_t r = (uint8_t)(color.r * 255.f);
-	uint8_t g = (uint8_t)(color.g * 255.f);
-	uint8_t b = (uint8_t)(color.b * 255.f);
-	uint8_t a = (uint8_t)(color.a * 255.f);
+	uint32_t ConvertToRGBA(const glm::vec4 color)
+	{
+		uint8_t r = (uint8_t)(color.r * 255.f);
+		uint8_t g = (uint8_t)(color.g * 255.f);
+		uint8_t b = (uint8_t)(color.b * 255.f);
+		uint8_t a = (uint8_t)(color.a * 255.f);
 
 
-	return (a << 24) | (b << 16) | (g << 8) | r;
+		return (a << 24) | (b << 16) | (g << 8) | r;
+	}
 }
 
 
@@ -17,9 +19,13 @@ Renderer::Renderer(uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[m_Width * m_Height])
 {
 	m_Objects.reserve(2);
-
 	m_Objects.push_back(new Sphere({0.f, 0.f, -1.f}, {1.f, 0.f, 1.f}, 3.f));
 	m_Objects.push_back(new Sphere({ 3.f, 4.f, -1.f }, { 0.f, 0.f, 1.f }, 2.f));
+
+	m_Width = width;
+	m_Height = height;
+	m_AspectRatio = (float)m_Width / m_Height;
+	m_PixelData = new uint32_t[m_Width * m_Height];
 }
 
 

@@ -14,6 +14,9 @@ public:
 	glm::vec3 GetRight() const { return m_RightVector; }
 	glm::vec3 GetUp() const { return m_UpVector; }
 	float GetFieldOfView() const { return m_FieldOfView; }
+
+private:
+	void RecalculateVectors();
 private:
 	glm::vec3 m_Position;
 	glm::vec3 m_FrontVector;
