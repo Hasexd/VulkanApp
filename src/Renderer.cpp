@@ -19,8 +19,8 @@ Renderer::Renderer(uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[m_Width * m_Height])
 {
 	m_Objects.reserve(2);
-	m_Objects.push_back(new Sphere({0.f, 0.f, -1.f}, {1.f, 0.f, 1.f}, 3.f));
-	m_Objects.push_back(new Sphere({ 3.f, 4.f, -1.f }, { 0.f, 0.f, 1.f }, 2.f));
+	m_Objects.emplace_back(new Sphere({0.f, 0.f, -1.f}, {1.f, 0.f, 1.f}, 3.f));
+	m_Objects.emplace_back(new Sphere({ 3.f, 4.f, -1.f }, { 0.f, 0.f, 1.f }, 2.f));
 
 	m_Width = width;
 	m_Height = height;
@@ -61,6 +61,7 @@ void Renderer::Render()
 glm::vec4 Renderer::PerPixel(const glm::vec2& coord) const
 {
     float scalar = glm::tan(glm::radians(m_Camera.GetFieldOfView()) / 2);
+
     glm::vec3 rayDirection(
         coord.x * m_AspectRatio * scalar,
         coord.y * scalar,
@@ -75,6 +76,7 @@ glm::vec4 Renderer::PerPixel(const glm::vec2& coord) const
 
     Ray ray(m_Camera.GetPosition(), rayDirection);
 
+
 	for (const auto& object : m_Objects)
 	{
 		if (glm::vec3 hitNear, hitFar; object->Intersects(ray, hitNear, hitFar))
@@ -83,6 +85,7 @@ glm::vec4 Renderer::PerPixel(const glm::vec2& coord) const
 			float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
 
 			glm::vec3 hitPoint;
+
 			if (distanceToNear > 0.0f)
 			{
 				hitPoint = hitNear;

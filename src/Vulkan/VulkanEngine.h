@@ -6,6 +6,7 @@
 #include <functional>
 #include <span>
 #include <array>
+#include <print>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>

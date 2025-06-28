@@ -1,6 +1,9 @@
 #pragma once
 
 
+#include <print>
+#include <memory>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -20,10 +23,10 @@ private:
 	void Cleanup();
 private:
 	uint32_t m_Width, m_Height;
-	GLFWwindow* m_Window;
 
-	Renderer m_Renderer;
-	VulkanEngine m_Engine;
+	std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> m_Window;
+	std::unique_ptr<Renderer> m_Renderer;
+	std::unique_ptr<VulkanEngine> m_Engine;
 
 	float m_LastRenderTime;
 	double m_DeltaTime;

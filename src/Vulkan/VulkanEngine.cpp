@@ -268,7 +268,7 @@ void VulkanEngine::InitImgui()
 	initInfo.CheckVkResultFn = [](VkResult err) -> void
 	{
 		if (err != VK_SUCCESS)
-			printf("Error: %d", err);
+			std::println("Error: {}", (int)err);
 	};
 
 	initInfo.PipelineRenderingCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
@@ -364,7 +364,7 @@ void VulkanEngine::InitSwapchain()
 	}
 	else
 	{
-		printf("Failed to create a swapchain, no window set");
+		std::println("Failed to create a swapchain, no window set");
 	}
 
 }
@@ -471,7 +471,7 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
 
 	if (vmaCreateBuffer(m_Allocator, &bufferInfo, &vmaAllocInfo, &newBuffer.Buffer, &newBuffer.Allocation, &newBuffer.Info) != VK_SUCCESS)
 	{
-		printf("Error when creating a buffer!");
+		std::println("Error when creating a buffer!");
 	}
 
 	if (!ResizeRequested)

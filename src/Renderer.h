@@ -32,7 +32,7 @@ private:
 	uint32_t m_Width, m_Height;
 	uint32_t* m_PixelData;
 
-	std::vector<Object*> m_Objects;
+	std::vector<std::unique_ptr<Object>> m_Objects;
 
 	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, 1.f, -1.f));
 	float m_AspectRatio;
