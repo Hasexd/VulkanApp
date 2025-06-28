@@ -109,7 +109,7 @@ project "VulkanRayTracer"
     location "src"
     kind "ConsoleApp"
     language "C++"
-    cppdialect "C++20"
+    cppdialect "C++latest"
     staticruntime "on"
 
     targetdir ("bin/target/" .. outputdir .. "/%{prj.name}")
@@ -117,7 +117,9 @@ project "VulkanRayTracer"
 
     files {
         "src/**.h",
-        "src/**.cpp"
+        "src/**.cpp",
+        "src/Vulkan/**.cpp",
+        "src/Vulkan/**.h"
     }
 
     includedirs {
@@ -126,7 +128,8 @@ project "VulkanRayTracer"
         "vendors/vk-bootstrap/include",
         "vendors/VulkanMemoryAllocator/include",
         "vendors/imgui",
-        vulkan .. "/include"
+        vulkan .. "/include",
+        "src/Vulkan"
 
     }
 

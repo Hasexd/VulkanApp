@@ -98,7 +98,7 @@ project "VulkanRayTracer"
     location "src"
     kind "ConsoleApp"
     language "C++"
-    cppdialect "C++20"
+    cppdialect "C++latest"
     staticruntime "on"
 
     targetdir ("bin/target/" .. outputdir .. "/%{prj.name}")
@@ -106,9 +106,10 @@ project "VulkanRayTracer"
 
     files {
         "src/**.h",
-        "src/**.cpp"
+        "src/**.cpp",
+        "src/Vulkan/**.cpp",
+        "src/Vulkan/**.h"
     }
-
 
     includedirs {
         "vendors/glfw/include",
@@ -116,7 +117,8 @@ project "VulkanRayTracer"
         "vendors/vk-bootstrap/include",
         "vendors/VulkanMemoryAllocator/include",
         "vendors/imgui",
-        "$(VULKAN_SDK)/Include"
+        "$(VULKAN_SDK)/Include",
+        "src/Vulkan"
 
     }
 
@@ -127,14 +129,14 @@ project "VulkanRayTracer"
     }
 
      vpaths {
-         ["Vulkan"] = {"src/VulkanEngine.h", "src/VulkanEngine.cpp", "src/VulkanTypes.h"},
-         ["Header Files"] = {"src/**.h"},
-         ["Source Files"] = {"src/**.cpp"}
-     }
+    { ["_Vulkan"]       = { "src/Vulkan/**" } },
+    { ["Header Files"] = { "src/**.h" } },
+    { ["Source Files"] = { "src/**.cpp" } },
+}
 
     filter "system:windows"
         systemversion "latest"
-        links { "$(VULKAN_SDK)/Lib/vulkan-1" } -- Link Vulkan SDK library
+        links { "$(VULKAN_SDK)/Lib/vulkan-1" }
 
     filter "configurations:Debug"
         runtime "Debug"
