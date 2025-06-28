@@ -18,9 +18,9 @@ namespace
 Renderer::Renderer(uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[m_Width * m_Height])
 {
-	m_Objects.reserve(2);
-	m_Objects.emplace_back(new Sphere({0.f, 0.f, -1.f}, {1.f, 0.f, 1.f}, 3.f));
-	m_Objects.emplace_back(new Sphere({ 3.f, 4.f, -1.f }, { 0.f, 0.f, 1.f }, 2.f));
+	m_Spheres.reserve(2);
+	m_Spheres.emplace_back(new Sphere({0.f, 0.f, -1.f}, {1.f, 0.f, 1.f}, 3.f));
+	m_Spheres.emplace_back(new Sphere({ 3.f, 10.f, -1.f }, { 0.f, 0.f, 1.f }, 2.f));
 
 	m_Width = width;
 	m_Height = height;
@@ -76,37 +76,45 @@ glm::vec4 Renderer::PerPixel(const glm::vec2& coord) const
 
     Ray ray(m_Camera.GetPosition(), rayDirection);
 
+	std::weak_ptr<Sphere> closestSphere;
+	glm::vec3 closestHit{};
+	float closestDistance = std::numeric_limits<float>::max();
 
-	for (const auto& object : m_Objects)
+
+	glm::vec3 hitNear{}, hitFar{};
+
+	for (const auto& sphere : m_Spheres)
 	{
-		if (glm::vec3 hitNear, hitFar; object->Intersects(ray, hitNear, hitFar))
+		if (sphere->Intersects(ray, hitNear, hitFar))
 		{
 			float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
 			float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
 
-			glm::vec3 hitPoint;
-
-			if (distanceToNear > 0.0f)
+			if (distanceToNear > 0.f && closestDistance > distanceToNear)
 			{
-				hitPoint = hitNear;
+				closestSphere = sphere;
+				closestDistance = distanceToNear;
+				closestHit = hitNear;
 			}
-			else if (distanceToFar > 0.0f)
+			else if (distanceToFar > 0.f && closestDistance > distanceToFar)
 			{
-				hitPoint = hitFar;
+				closestSphere = sphere;
+				closestDistance = distanceToFar;
+				closestHit = hitFar;
 			}
-			else
-			{
-				return { 0.0f, 0.0f, 0.0f, 1.0f };
-			}
-
-			glm::vec3 normal = glm::normalize(hitPoint - object->GetPosition());
-			float angle = glm::max(glm::dot(normal, -lightDir), 0.f);
-			glm::vec3 sphereColor = object->GetColor() * angle;
-
-			return { sphereColor, 1.f };
 		}
 	}
-	return { 0.0f, 0.0f, 0.0f, 1.0f };
+
+	if (const auto& object = closestSphere.lock())
+	{
+		glm::vec3 normal = glm::normalize(closestHit - object->GetPosition());
+		float angle = glm::max(glm::dot(normal, -lightDir), 0.f);
+		glm::vec3 sphereColor = object->GetColor() * angle;
+
+		return { sphereColor, 1.f };
+	}
+
+	return s_BackgroundColor;
 }
 
 void Renderer::MoveCamera(const glm::vec3& movement, double deltaTime)
@@ -114,23 +122,9 @@ void Renderer::MoveCamera(const glm::vec3& movement, double deltaTime)
 	m_Camera.Move(movement, deltaTime);
 }
 
-void Renderer::RotateCamera(double xPos, double yPos, double deltaTime)
+void Renderer::RotateCamera(double xPos, double yPos)
 {
-	if (m_FirstMove)
-	{
-		m_LastX = xPos;
-		m_LastY = yPos;
-		m_FirstMove = false;
-		return;
-	}
-
-	double xOffset = xPos - m_LastX;
-	double yOffset = yPos - m_LastY;
-
-	m_LastX = xPos;
-	m_LastY = yPos;
-
-	m_Camera.Rotate(xOffset, yOffset, deltaTime);
+	m_Camera.Rotate(xPos, yPos);
 }
 
 uint32_t* Renderer::GetData() const

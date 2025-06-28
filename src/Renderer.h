@@ -10,7 +10,6 @@
 #include "Camera.h"
 #include "Random.h"
 #include "Ray.h"
-#include "Object.h"
 #include "Sphere.h"
 
 class Renderer
@@ -24,7 +23,7 @@ public:
 	uint32_t* GetData() const;
 
 	void MoveCamera(const glm::vec3& movement, double deltaTime);
-	void RotateCamera(double xPos, double yPos, double deltaTime);
+	void RotateCamera(double xPos, double yPos);
 
 	Camera* GetCamera() { return &m_Camera; }
 private:
@@ -32,13 +31,13 @@ private:
 	uint32_t m_Width, m_Height;
 	uint32_t* m_PixelData;
 
-	std::vector<std::unique_ptr<Object>> m_Objects;
+	std::vector<std::shared_ptr<Sphere>> m_Spheres;
 
 	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, 1.f, -1.f));
 	float m_AspectRatio;
 
 	Camera m_Camera;
-	double m_LastX = 0.f, m_LastY = 0.f;
-	bool m_FirstMove = true;
+
+	glm::vec4 s_BackgroundColor = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 };

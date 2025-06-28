@@ -23,8 +23,8 @@ bool Sphere::Intersects(const Ray& ray, glm::vec3& outHitNear, glm::vec3& outHit
 		float t1 = (-b - sqrt(discriminant)) / (2 * a);
 		float t2 = (-b + sqrt(discriminant)) / (2 * a);
 
-		outHitNear = oc + ray.Direction * t1;
-		outHitFar = oc + ray.Direction * t2;
+		outHitNear = ray.Origin + ray.Direction * t1;
+		outHitFar = ray.Origin + ray.Direction * t2;
 
 		return true;
 	}

@@ -30,4 +30,8 @@ private:
 
 	float m_LastRenderTime;
 	double m_DeltaTime;
+
+	double m_LastMouseX = 0.f;
+	double m_LastMouseY = 0.f;
+	bool m_FirstMouse = true;
 };

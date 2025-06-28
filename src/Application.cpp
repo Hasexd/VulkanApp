@@ -116,12 +116,24 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 		glfwSetInputMode(m_Window.get(), GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 
 	glfwSetInputMode(m_Window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwGetCursorPos(m_Window.get(), &m_LastMouseX, &m_LastMouseY);
 
 	glfwSetCursorPosCallback(m_Window.get(), [](GLFWwindow* window, double xpos, double ypos) -> void
 		{
-			const auto instance = static_cast<Application*>(glfwGetWindowUserPointer(window));
+			auto instance = static_cast<Application*>(glfwGetWindowUserPointer(window));
 
-			instance->m_Renderer->RotateCamera(xpos, ypos, instance->m_DeltaTime);
+			if (instance->m_FirstMouse) {
+				instance->m_LastMouseX = xpos;
+				instance->m_LastMouseY = ypos;
+				instance->m_FirstMouse = false;
+			}
+
+			double xOffset = instance->m_LastMouseX - xpos;
+			double yOffset = instance->m_LastMouseY - ypos;
+			instance->m_LastMouseX = xpos;
+			instance->m_LastMouseY = ypos;
+
+			instance->m_Renderer->RotateCamera(xOffset, yOffset);
 		});
 
 
