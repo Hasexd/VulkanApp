@@ -19,8 +19,8 @@ Renderer::Renderer(uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[m_Width * m_Height])
 {
 	m_Spheres.reserve(2);
-	m_Spheres.emplace_back(new Sphere({0.f, 0.f, -1.f}, {1.f, 0.f, 1.f}, 3.f));
-	m_Spheres.emplace_back(new Sphere({ 3.f, 10.f, -1.f }, { 0.f, 0.f, 1.f }, 2.f));
+	m_Spheres.emplace_back(new Sphere({0.f, 0.f, 10.f}, {1.f, 0.f, 1.f}, 2.f));
+	m_Spheres.emplace_back(new Sphere({ 0.f, 0.f, 5.f }, { 0.f, 0.f, 1.f }, 2.f));
 
 	m_Width = width;
 	m_Height = height;
