@@ -12,27 +12,32 @@ namespace
 
 		return (a << 24) | (b << 16) | (g << 8) | r;
 	}
+	constexpr glm::vec4 c_BackgroundColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+	constexpr int c_MaxRayBounces = 2;
+	constexpr float c_Epsilon = 0.0001f;
 }
 
 
 Renderer::Renderer(uint32_t width, uint32_t height) :
-	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[m_Width * m_Height])
+	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(std::make_unique<uint32_t[]>(m_Width * m_Height))
 {
+
+	Material pink = { {1.f, 0.f, 1.f, 1.f}, 50, false };
+	Material blue = { {0.f, 0.f, 1.f, 1.f}, 50, false };
+
 	m_Spheres.reserve(2);
-	m_Spheres.emplace_back(Sphere({0.f, 0.f, 10.f}, {1.f, 0.f, 1.f}, 2.f));
-	m_Spheres.emplace_back(Sphere({ 0.f, 0.f, 5.f }, { 0.f, 0.f, 1.f }, 2.f));
+	m_Spheres.emplace_back(Sphere({0.f, 0.f, 10.f}, 2.f, pink));
+	m_Spheres.emplace_back(Sphere({ 0.f, 0.f, 5.f }, 2.f, blue));
 
 	m_Width = width;
 	m_Height = height;
 	m_AspectRatio = (float)m_Width / m_Height;
-	m_PixelData = new uint32_t[m_Width * m_Height];
 }
 
 
 void Renderer::Resize(uint32_t width, uint32_t height)
 {
-	delete[] m_PixelData;
-	m_PixelData = new uint32_t[width * height];
+	m_PixelData.reset(new uint32_t[width * height]);
 
 	m_Width = width;
 	m_Height = height;
@@ -74,23 +79,33 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 		rayDirection.z * m_Camera.GetDirection()
 	);
 
-	const Ray ray(m_Camera.GetPosition(), rayDirection);
-	
+	Ray ray(m_Camera.GetPosition(), rayDirection);
+	glm::vec4 color = c_BackgroundColor;
+	float multiplier = 1.f;
 
-	if (const HitPayload hit = TraceRay(ray); hit.HitDistance > 0.f)
+	for (size_t i = 0; i < c_MaxRayBounces; i++)
 	{
-		float angle = glm::max(glm::dot(hit.WorldNormal, -lightDir), 0.f);
-		glm::vec3 sphereColor = m_Spheres[hit.ObjectIndex].GetColor() * angle;
+		const auto& [hitDistance, worldPosition, worldNormal, objectIndex] = TraceRay(ray);
+		if (hitDistance > 0.f)
+		{
+			const float angle = glm::max(glm::dot(worldNormal, -lightDir), 0.f);
 
-		return { sphereColor, 1.f };
+			const glm::vec4 sphereColor = m_Spheres[objectIndex].GetMaterial().Color * angle;
+			color += sphereColor * multiplier;
+
+			multiplier *= 0.7f;
+
+			ray.Origin = worldPosition + worldNormal * c_Epsilon;
+			ray.Direction = glm::reflect(ray.Direction, worldNormal);
+		}
 	}
 
-	return c_BackgroundColor;
+	return color;
 }
 
 HitPayload Renderer::TraceRay(const Ray& ray) const
 {
-	size_t closestSphereIndex = std::numeric_limits<size_t>::max();
+	uint32_t closestSphereIndex = std::numeric_limits<uint32_t>::max();
 	float closestDistance = std::numeric_limits<float>::max();
 
 	glm::vec3 hitNear{}, hitFar{};
@@ -115,8 +130,10 @@ HitPayload Renderer::TraceRay(const Ray& ray) const
 		}
 	}
 
-	if (closestSphereIndex < std::numeric_limits<size_t>::max())
+	if (closestSphereIndex < std::numeric_limits<uint32_t>::max())
+	{
 		return ClosestHit(ray, closestDistance, closestSphereIndex);
+	}
 
 	return Miss(ray);
 }
@@ -139,9 +156,4 @@ HitPayload Renderer::Miss(const Ray& ray) const
 	hit.HitDistance = -1.f;
 
 	return hit;
-}
-
-uint32_t* Renderer::GetData() const
-{
-	return m_PixelData;
 }
