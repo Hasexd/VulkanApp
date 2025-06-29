@@ -24,24 +24,18 @@ public:
 	HitPayload ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex) const;
 	HitPayload Miss(const Ray& ray) const;
 
-
 	uint32_t* GetData() const;
 
-	void MoveCamera(const glm::vec3& movement, double deltaTime);
-	void RotateCamera(double xPos, double yPos);
-
-	Camera* GetCamera() { return &m_Camera; }
+	Camera& GetCamera() { return m_Camera; }
 private:
-
 	uint32_t m_Width, m_Height;
 	uint32_t* m_PixelData;
 
+	Camera m_Camera;
 	std::vector<Sphere> m_Spheres;
 
 	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, 1.f, -1.f));
 	float m_AspectRatio;
-
-	Camera m_Camera;
 
 	const glm::vec4 c_BackgroundColor = { 0.0f, 0.0f, 0.0f, 1.0f };
 

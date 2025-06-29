@@ -60,7 +60,7 @@ void Renderer::Render()
 
 glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 {
-	float scalar = glm::tan(glm::radians(m_Camera.GetFieldOfView()) / 2);
+	const float scalar = glm::tan(glm::radians(m_Camera.GetFieldOfView()) / 2);
 
 	glm::vec3 rayDirection(
 		coord.x * m_AspectRatio * scalar,
@@ -74,11 +74,10 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 		rayDirection.z * m_Camera.GetDirection()
 	);
 
-	Ray ray(m_Camera.GetPosition(), rayDirection);
+	const Ray ray(m_Camera.GetPosition(), rayDirection);
+	
 
-	HitPayload hit = TraceRay(ray);
-
-	if (hit.HitDistance > 0.f)
+	if (const HitPayload hit = TraceRay(ray); hit.HitDistance > 0.f)
 	{
 		float angle = glm::max(glm::dot(hit.WorldNormal, -lightDir), 0.f);
 		glm::vec3 sphereColor = m_Spheres[hit.ObjectIndex].GetColor() * angle;
@@ -134,23 +133,12 @@ HitPayload Renderer::ClosestHit(const Ray& ray, float hitDistance, uint32_t obje
 	return hit;
 }
 
-
 HitPayload Renderer::Miss(const Ray& ray) const
 {
 	HitPayload hit{};
 	hit.HitDistance = -1.f;
 
 	return hit;
-}
-
-void Renderer::MoveCamera(const glm::vec3& movement, double deltaTime)
-{
-	m_Camera.Move(movement, deltaTime);
-}
-
-void Renderer::RotateCamera(double xPos, double yPos)
-{
-	m_Camera.Rotate(xPos, yPos);
 }
 
 uint32_t* Renderer::GetData() const

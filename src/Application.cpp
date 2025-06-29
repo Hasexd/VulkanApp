@@ -22,7 +22,7 @@ Application::~Application()
 void Application::Run()
 {
 	double lastFrame = glfwGetTime();
-	Camera* camera = m_Renderer->GetCamera();
+	Camera& camera = m_Renderer->GetCamera();
 
 	while (!glfwWindowShouldClose(m_Window.get()))
 	{
@@ -33,18 +33,18 @@ void Application::Run()
 		glm::vec3 movement(0.0f);
 
 		if (glfwGetKey(m_Window.get(), GLFW_KEY_W) == GLFW_PRESS)
-			movement -= camera->GetDirection();
+			movement -= camera.GetDirection();
 		if (glfwGetKey(m_Window.get(), GLFW_KEY_S) == GLFW_PRESS)
-			movement += camera->GetDirection();
+			movement += camera.GetDirection();
 		if (glfwGetKey(m_Window.get(), GLFW_KEY_A) == GLFW_PRESS)
-			movement -= camera->GetRight();
+			movement -= camera.GetRight();
 		if (glfwGetKey(m_Window.get(), GLFW_KEY_D) == GLFW_PRESS)
-			movement += camera->GetRight();
+			movement += camera.GetRight();
 
 		if (glm::length(movement) > 0.0f)
 			movement = glm::normalize(movement);
 
-		m_Renderer->MoveCamera(movement, m_DeltaTime);
+		camera.Move(movement, m_DeltaTime);
 
 		glfwPollEvents();
 		if (m_Engine->ResizeRequested)
@@ -133,7 +133,7 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 			instance->m_LastMouseX = xpos;
 			instance->m_LastMouseY = ypos;
 
-			instance->m_Renderer->RotateCamera(xOffset, yOffset);
+			instance->m_Renderer->GetCamera().Rotate(xOffset, yOffset);
 		});
 
 
