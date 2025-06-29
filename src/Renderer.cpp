@@ -19,8 +19,8 @@ Renderer::Renderer(uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(new uint32_t[m_Width * m_Height])
 {
 	m_Spheres.reserve(2);
-	m_Spheres.emplace_back(new Sphere({0.f, 0.f, 10.f}, {1.f, 0.f, 1.f}, 2.f));
-	m_Spheres.emplace_back(new Sphere({ 0.f, 0.f, 5.f }, { 0.f, 0.f, 1.f }, 2.f));
+	m_Spheres.emplace_back(Sphere({0.f, 0.f, 10.f}, {1.f, 0.f, 1.f}, 2.f));
+	m_Spheres.emplace_back(Sphere({ 0.f, 0.f, 5.f }, { 0.f, 0.f, 1.f }, 2.f));
 
 	m_Width = width;
 	m_Height = height;
@@ -50,7 +50,7 @@ void Renderer::Render()
 			glm::vec2 coord = { (float)x / m_Width, float(y) / m_Height };
 			coord = coord * 2.f - 1.f;
 
-			glm::vec4 color = PerPixel(coord);
+			glm::vec4 color = RayGen(coord);
 			color = glm::clamp(color, glm::vec4(0.f), glm::vec4(1.f));
 			m_PixelData[x + y * m_Width] = ConvertToRGBA(color);
 		}
@@ -58,63 +58,89 @@ void Renderer::Render()
 }
 
 
-glm::vec4 Renderer::PerPixel(const glm::vec2& coord) const
+glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 {
-    float scalar = glm::tan(glm::radians(m_Camera.GetFieldOfView()) / 2);
+	float scalar = glm::tan(glm::radians(m_Camera.GetFieldOfView()) / 2);
 
-    glm::vec3 rayDirection(
-        coord.x * m_AspectRatio * scalar,
-        coord.y * scalar,
-        -1.0f
-    );
+	glm::vec3 rayDirection(
+		coord.x * m_AspectRatio * scalar,
+		coord.y * scalar,
+		-1.0f
+	);
 
-    rayDirection = glm::normalize(
-        rayDirection.x * m_Camera.GetRight() +
-        rayDirection.y * m_Camera.GetUp() +
-        rayDirection.z * m_Camera.GetDirection()
-    );
+	rayDirection = glm::normalize(
+		rayDirection.x * m_Camera.GetRight() +
+		rayDirection.y * m_Camera.GetUp() +
+		rayDirection.z * m_Camera.GetDirection()
+	);
 
-    Ray ray(m_Camera.GetPosition(), rayDirection);
+	Ray ray(m_Camera.GetPosition(), rayDirection);
 
-	std::weak_ptr<Sphere> closestSphere;
-	glm::vec3 closestHit{};
+	HitPayload hit = TraceRay(ray);
+
+	if (hit.HitDistance > 0.f)
+	{
+		float angle = glm::max(glm::dot(hit.WorldNormal, -lightDir), 0.f);
+		glm::vec3 sphereColor = m_Spheres[hit.ObjectIndex].GetColor() * angle;
+
+		return { sphereColor, 1.f };
+	}
+
+	return c_BackgroundColor;
+}
+
+HitPayload Renderer::TraceRay(const Ray& ray) const
+{
+	size_t closestSphereIndex = std::numeric_limits<size_t>::max();
 	float closestDistance = std::numeric_limits<float>::max();
-
 
 	glm::vec3 hitNear{}, hitFar{};
 
-	for (const auto& sphere : m_Spheres)
+	for (size_t i = 0; i < m_Spheres.size(); i++)
 	{
-		if (sphere->Intersects(ray, hitNear, hitFar))
+		if (m_Spheres[i].Intersects(ray, hitNear, hitFar))
 		{
 			float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
 			float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
 
 			if (distanceToNear > 0.f && closestDistance > distanceToNear)
 			{
-				closestSphere = sphere;
+				closestSphereIndex = i;
 				closestDistance = distanceToNear;
-				closestHit = hitNear;
 			}
 			else if (distanceToFar > 0.f && closestDistance > distanceToFar)
 			{
-				closestSphere = sphere;
+				closestSphereIndex = i;
 				closestDistance = distanceToFar;
-				closestHit = hitFar;
 			}
 		}
 	}
 
-	if (const auto& object = closestSphere.lock())
-	{
-		glm::vec3 normal = glm::normalize(closestHit - object->GetPosition());
-		float angle = glm::max(glm::dot(normal, -lightDir), 0.f);
-		glm::vec3 sphereColor = object->GetColor() * angle;
+	if (closestSphereIndex < std::numeric_limits<size_t>::max())
+		return ClosestHit(ray, closestDistance, closestSphereIndex);
 
-		return { sphereColor, 1.f };
-	}
+	return Miss(ray);
+}
 
-	return s_BackgroundColor;
+HitPayload Renderer::ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex) const
+{
+	HitPayload hit{};
+
+	hit.HitDistance = hitDistance;
+	hit.ObjectIndex = objectIndex;
+	hit.WorldPosition = ray.Origin + ray.Direction * hitDistance;
+	hit.WorldNormal = glm::normalize(hit.WorldPosition - m_Spheres[objectIndex].GetPosition());
+
+	return hit;
+}
+
+
+HitPayload Renderer::Miss(const Ray& ray) const
+{
+	HitPayload hit{};
+	hit.HitDistance = -1.f;
+
+	return hit;
 }
 
 void Renderer::MoveCamera(const glm::vec3& movement, double deltaTime)

@@ -2,11 +2,10 @@
 
 
 Sphere::Sphere(const glm::vec3& position, const glm::vec3& color, float radius):
-	Object(position, color), m_Radius(radius)
+	m_Position(position), m_Color(color), m_Radius(radius)
 {
 	
 }
-
 
 bool Sphere::Intersects(const Ray& ray, glm::vec3& outHitNear, glm::vec3& outHitFar) const
 {

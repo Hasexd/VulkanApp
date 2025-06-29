@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <vector>
-#include <memory>
 
 
 #include <glm.hpp>
@@ -19,7 +18,13 @@ public:
 	void Resize(uint32_t width, uint32_t height);
 
 	void Render();
-	glm::vec4 PerPixel(const glm::vec2& coord) const;
+	glm::vec4 RayGen(const glm::vec2& coord) const;
+
+	HitPayload TraceRay(const Ray& ray) const;
+	HitPayload ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex) const;
+	HitPayload Miss(const Ray& ray) const;
+
+
 	uint32_t* GetData() const;
 
 	void MoveCamera(const glm::vec3& movement, double deltaTime);
@@ -31,13 +36,13 @@ private:
 	uint32_t m_Width, m_Height;
 	uint32_t* m_PixelData;
 
-	std::vector<std::shared_ptr<Sphere>> m_Spheres;
+	std::vector<Sphere> m_Spheres;
 
 	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, 1.f, -1.f));
 	float m_AspectRatio;
 
 	Camera m_Camera;
 
-	glm::vec4 s_BackgroundColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+	const glm::vec4 c_BackgroundColor = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 };

@@ -2,6 +2,15 @@
 
 #include <glm.hpp>
 
+
+struct HitPayload
+{
+	float HitDistance;
+	glm::vec3 WorldPosition;
+	glm::vec3 WorldNormal;
+	uint32_t ObjectIndex;
+};
+
 class Ray
 {
 public:
