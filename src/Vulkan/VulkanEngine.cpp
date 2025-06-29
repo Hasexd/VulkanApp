@@ -184,7 +184,6 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) c
 	vkCmdBeginRendering(cmd, &renderInfo);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 	vkCmdEndRendering(cmd);
-
 	
 }
 
@@ -250,6 +249,7 @@ void VulkanEngine::InitImgui()
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImGui::StyleColorsDark();
 
 	ImGui_ImplGlfw_InitForVulkan(m_Window, true);
@@ -279,8 +279,6 @@ void VulkanEngine::InitImgui()
 	initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
 	ImGui_ImplVulkan_Init(&initInfo);
-
-	ImGui_ImplVulkan_CreateFontsTexture();
 
 	m_MainDeletionQueue.PushFunction([&]() 
 		{

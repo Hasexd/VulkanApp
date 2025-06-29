@@ -23,7 +23,7 @@ public:
 	HitPayload Miss(const Ray& ray) const;
 
 	uint32_t* GetData() const { return m_PixelData.get(); };
-
+	std::vector<Sphere>& GetSpheres()  { return m_Spheres; }
 	Camera& GetCamera() { return m_Camera; }
 private:
 	uint32_t m_Width, m_Height;
@@ -32,7 +32,7 @@ private:
 	Camera m_Camera;
 	std::vector<Sphere> m_Spheres;
 
-	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, 1.f, -1.f));
+	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, -1.f, 1.f));
 	float m_AspectRatio;
 
 

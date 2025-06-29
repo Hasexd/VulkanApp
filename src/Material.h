@@ -4,8 +4,7 @@
 
 struct Material
 {
-	glm::vec4 Color;
+	glm::vec4 Color {1.f};
 	float Roughness;
-	float Reflectivity;
-	bool Metallic;
+	float Metallic = 0.f;
 };

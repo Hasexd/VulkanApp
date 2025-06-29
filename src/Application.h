@@ -6,6 +6,7 @@
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <gtc/type_ptr.hpp>
 
 #include "VulkanEngine.h"
 #include "Renderer.h"
@@ -20,6 +21,8 @@ public:
 private:
 	void Render();
 	void Init(uint32_t width, uint32_t height, const char* title, bool resizable);
+	void HandleMouseInput(Camera& camera);
+	void HandleCursorInput();
 	void Cleanup();
 private:
 	uint32_t m_Width, m_Height;
@@ -34,4 +37,7 @@ private:
 	double m_LastMouseX = 0.f;
 	double m_LastMouseY = 0.f;
 	bool m_FirstMouse = true;
+	bool m_CursorVisible = false;
+	bool m_EscapePressed = false;
+	bool m_LeftClickPressed = false;
 };
