@@ -39,7 +39,7 @@ private:
 	std::unique_ptr<uint32_t[]> m_PixelData;
 	std::unique_ptr<glm::vec4[]> m_AccumulationBuffer;
 
-	uint32_t m_SampleCount = 0;
+	std::atomic<uint32_t> m_SampleCount = 0;
 	const uint32_t c_MaxSamples = 250;
 	bool m_AccumulationEnabled = true;
 

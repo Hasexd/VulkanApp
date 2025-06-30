@@ -70,7 +70,7 @@ void Renderer::Render()
 		return;
 
 	if (m_AccumulationEnabled)
-		m_SampleCount++;
+		++m_SampleCount;
 
 	const uint32_t tileSize = 64;
 	const uint32_t tilesX = (m_Width + tileSize - 1) / tileSize;
