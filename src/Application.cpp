@@ -11,21 +11,6 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 	m_Window(nullptr, glfwDestroyWindow), m_Renderer(std::make_unique<Renderer>(width, height)), m_Engine(std::make_unique<VulkanEngine>())
 {
 	Init(width, height, title, resizable);
-
-	/*std::vector<Material> materials;
-	std::vector<Sphere> spheres;
-
-	materials.emplace_back(Material{ {1.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
-	materials.emplace_back(Material{ {0.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
-
-	spheres.emplace_back(Sphere({ 0.f, 0.f, 5.f }, 2.f, 0));
-	spheres.emplace_back(Sphere({ 0.f, 0.f, 0.f }, 2, 1));
-
-	m_Scenes.emplace_back(std::make_shared<Scene>(spheres, materials));
-
-	if (!m_Scenes.empty())
-		m_Renderer->SetScene(m_Scenes[0]);*/
-
 	LoadJSONScenes();
 }
 
@@ -70,7 +55,7 @@ void Application::Run()
 		}
 		bool sceneChanged = false;
 
-		if (m_Scenes.size() > 0)
+		if (!m_Scenes.empty())
 		{
 			ImGui::Begin("Scene selection");
 
