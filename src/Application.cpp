@@ -66,9 +66,9 @@ void Application::Run()
 				sceneChanged = true;
 			if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
 				sceneChanged = true;
-			if (ImGui::ColorEdit3("Color", glm::value_ptr(sphere.GetMaterial().Color)))
+			if (ImGui::ColorEdit3("Color", glm::value_ptr(m_Renderer->GetMaterials()[sphere.GetMaterialIndex()].Color)))
 				sceneChanged = true;
-			if (ImGui::DragFloat("Roughness", &sphere.GetMaterial().Roughness, 0.01f, 0.0f, 1.0f))
+			if (ImGui::DragFloat("Roughness", &m_Renderer->GetMaterials()[sphere.GetMaterialIndex()].Roughness, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
 
 			ImGui::Separator();
@@ -77,7 +77,7 @@ void Application::Run()
 		ImGui::End();
 
 		ImGui::Begin("Information");
-		ImGui::Text("Rendering took: %.3fms", m_LastRenderTime);
+		ImGui::Text("Rendering took: %.3fms", m_LastFrameRenderTime);
 
 		ImGui::Separator();
 		ImGui::Text("Accumulation Settings");
@@ -91,6 +91,9 @@ void Application::Run()
 				m_Renderer->ResetAccumulation();
 			}
 		}
+
+		ImGui::InputScalar("Amount of samples", ImGuiDataType_U32, &m_Renderer->GetMaxSamples());
+		ImGui::InputScalar("Maximum ray bounces", ImGuiDataType_U32, &m_Renderer->GetMaxRayBounces());
 
 		if (accumulationEnabled)
 		{
@@ -148,12 +151,12 @@ void Application::Render()
 	auto endTime = std::chrono::high_resolution_clock::now();
 
 	std::chrono::duration<float, std::milli> duration = endTime - startTime;
-	m_LastRenderTime = duration.count();
+	m_LastFrameRenderTime = duration.count();
 }
 
 void Application::HandleMouseInput(Camera& camera)
 {
-	if (m_CursorVisible || ImGui::GetIO().WantCaptureMouse)
+	if (m_CursorVisible)
 		return;
 
 	double xpos, ypos;

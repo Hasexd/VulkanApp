@@ -1,8 +1,8 @@
 	#include "Sphere.h"
 
 
-Sphere::Sphere(const glm::vec3& position, float radius, const Material& material):
-	m_Position(position), m_Radius(radius), m_Material(material)
+Sphere::Sphere(const glm::vec3& position, float radius, uint32_t materialIndex):
+	m_Position(position), m_Radius(radius), m_MaterialIndex(materialIndex)
 {
 	
 }

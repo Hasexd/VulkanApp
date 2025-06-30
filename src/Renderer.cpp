@@ -22,7 +22,6 @@ namespace
 	}
 
 	constexpr glm::vec4 c_BackgroundColor = { 0.1f, 0.2f, 0.4f, 0.0f };
-	constexpr int c_MaxRayBounces = 10;
 	constexpr float c_Epsilon = 0.0001f;
 }
 
@@ -32,18 +31,21 @@ Renderer::Renderer(uint32_t width, uint32_t height) :
 	m_PixelData(std::make_unique<uint32_t[]>(m_Width * m_Height)),
 	m_AccumulationBuffer(std::make_unique<glm::vec4[]>(m_Width * m_Height))
 {
+	m_Materials.emplace_back(Material{ {1.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
+	m_Materials.emplace_back(Material{ {0.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
 
-	Material pink = { {1.f, 0.f, 1.f, 1.f}, 0.1f, 0 };
-	Material blue = { {0.f, 0.f, 1.f, 1.f}, 0.1f, 0 };
 
 	m_Spheres.reserve(2);
-	m_Spheres.emplace_back(Sphere({0.f, 0.f, 5.f}, 2.f, pink));
-	m_Spheres.emplace_back(Sphere({ 0.f, 102.f, 0.f }, 100.f, blue));
+	m_Spheres.emplace_back(Sphere({0.f, 0.f, 5.f}, 2.f, 0));
+	m_Spheres.emplace_back(Sphere({ 0.f, 102.f, 0.f }, 100.f, 1));
 
 	m_Width = width;
 	m_Height = height;
 	m_AspectRatio = static_cast<float>(m_Width) / m_Height;
 	m_ThreadCount = std::thread::hardware_concurrency();
+
+	m_MaxSamples = 250;
+	m_MaxRayBounces = 10;
 
 	if (m_ThreadCount == 0)
 		m_ThreadCount = 4;
@@ -147,14 +149,14 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 	glm::vec4 color = c_BackgroundColor;
 	float multiplier = 1.f;
 
-	for (size_t i = 0; i < c_MaxRayBounces; i++)
+	for (size_t i = 0; i < m_MaxRayBounces; i++)
 	{
 		const HitPayload& hit = TraceRay(ray);
 
 		if (hit.HitDistance > 0.f)
 		{
 			const float angle = glm::max(glm::dot(hit.WorldNormal, -lightDir), 0.f);
-			const Material& material = m_Spheres[hit.ObjectIndex].GetMaterial();
+			const Material& material = m_Materials[m_Spheres[hit.ObjectIndex].GetMaterialIndex()];
 
 			const glm::vec4 sphereColor = material.Color * angle;
 			color += sphereColor * multiplier;
@@ -184,8 +186,8 @@ HitPayload Renderer::TraceRay(const Ray& ray) const
 	{
 		if (m_Spheres[i].Intersects(ray, hitNear, hitFar))
 		{
-			float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
-			float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
+			const float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
+			const float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
 
 			if (distanceToNear > 0.f && closestDistance > distanceToNear)
 			{

@@ -27,24 +27,42 @@ public:
 	HitPayload Miss(const Ray& ray) const;
 
 	uint32_t* GetData() const { return m_PixelData.get(); };
+
+	std::vector<Sphere> GetSpheres() const { return m_Spheres; }
 	std::vector<Sphere>& GetSpheres()  { return m_Spheres; }
+
+	std::vector<Material> GetMaterials() const { return m_Materials; }
+
 	Camera& GetCamera() { return m_Camera; }
 
 	void ResetAccumulation();
 	void SetAccumulation(bool enabled) { m_AccumulationEnabled = enabled; }
 	bool IsAccumulationEnabled() const { return m_AccumulationEnabled; }
-	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= c_MaxSamples; }
+
+	void SetMaxRayBounces(uint32_t bounces) { m_MaxRayBounces = bounces; }
+	uint32_t GetMaxRayBounces() const { return m_MaxRayBounces; }
+	uint32_t& GetMaxRayBounces() { return m_MaxRayBounces; }
+
+
+	void SetMaxSamples(uint32_t maxSamples) { m_MaxSamples = maxSamples; }
+	uint32_t GetMaxSamples() const { return m_MaxSamples; }
+	uint32_t& GetMaxSamples() { return m_MaxSamples; }
+
+
+	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
 private:
 	uint32_t m_Width, m_Height;
 	std::unique_ptr<uint32_t[]> m_PixelData;
 	std::unique_ptr<glm::vec4[]> m_AccumulationBuffer;
 
 	std::atomic<uint32_t> m_SampleCount = 0;
-	const uint32_t c_MaxSamples = 250;
-	bool m_AccumulationEnabled = true;
+	uint32_t m_MaxRayBounces;
+	uint32_t m_MaxSamples;
+	bool m_AccumulationEnabled = false;
 
 	Camera m_Camera;
 	std::vector<Sphere> m_Spheres;
+	std::vector<Material> m_Materials;
 
 	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, -1.f, 1.f));
 	float m_AspectRatio;

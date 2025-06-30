@@ -80,8 +80,6 @@ void VulkanEngine::DrawFrame(const uint32_t* pixelData)
 		void* data = m_Buffer.Allocation->GetMappedData();
 		memcpy(data, pixelData, m_SwapchainExtent.width * m_SwapchainExtent.height * 4);
 
-
-
 		VkBufferImageCopy region = {};
 		region.bufferOffset = 0;
 		region.bufferRowLength = 0;
