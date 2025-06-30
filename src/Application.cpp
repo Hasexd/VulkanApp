@@ -7,8 +7,7 @@ static void ErrorCallback(int error, const char* description)
 	std::println("Error: {}\n", description);
 }
 
-
-Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable):
+Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable) :
 	m_Window(nullptr, glfwDestroyWindow), m_Renderer(std::make_unique<Renderer>(width, height)), m_Engine(std::make_unique<VulkanEngine>())
 {
 	Init(width, height, title, resizable);
@@ -23,6 +22,7 @@ void Application::Run()
 {
 	double lastFrame = glfwGetTime();
 	Camera& camera = m_Renderer->GetCamera();
+	glm::vec3 lastCameraPos = camera.GetPosition();
 
 	while (!glfwWindowShouldClose(m_Window.get()))
 	{
@@ -45,27 +45,70 @@ void Application::Run()
 		HandleCursorInput();
 		HandleMouseInput(camera);
 
+		bool cameraChanged = false;
+		glm::vec3 currentCameraPos = camera.GetPosition();
+		if (glm::distance(currentCameraPos, lastCameraPos) > 0.001f)
+		{
+			cameraChanged = true;
+			lastCameraPos = currentCameraPos;
+		}
+
 		ImGui::Begin("Scene");
 
+		bool sceneChanged = false;
 		for (size_t i = 0; i < m_Renderer->GetSpheres().size(); i++)
 		{
 			Sphere& sphere = m_Renderer->GetSpheres()[i];
 
 			ImGui::PushID(i);
 
-			ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f);
-			ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f);
-			ImGui::DragFloat3("Color", glm::value_ptr(sphere.GetMaterial().Color), 0.1f);
-			ImGui::DragFloat("Roughness", &sphere.GetMaterial().Roughness, 0.1f);
+			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
+				sceneChanged = true;
+			if (ImGui::ColorEdit3("Color", glm::value_ptr(sphere.GetMaterial().Color)))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Roughness", &sphere.GetMaterial().Roughness, 0.01f, 0.0f, 1.0f))
+				sceneChanged = true;
 
 			ImGui::Separator();
 			ImGui::PopID();
 		}
-
 		ImGui::End();
 
 		ImGui::Begin("Information");
 		ImGui::Text("Rendering took: %.3fms", m_LastRenderTime);
+
+		ImGui::Separator();
+		ImGui::Text("Accumulation Settings");
+
+		bool accumulationEnabled = m_Renderer->IsAccumulationEnabled();
+		if (ImGui::Checkbox("Enable Accumulation", &accumulationEnabled))
+		{
+			m_Renderer->SetAccumulation(accumulationEnabled);
+			if (!accumulationEnabled)
+			{
+				m_Renderer->ResetAccumulation();
+			}
+		}
+
+		if (accumulationEnabled)
+		{
+			if (ImGui::Button("Reset Accumulation"))
+			{
+				m_Renderer->ResetAccumulation();
+			}
+
+			if (m_Renderer->IsComplete())
+			{
+				ImGui::TextColored(ImVec4(0, 1, 0, 1), "Rendering Complete!");
+			}
+		}
+		else
+		{
+			ImGui::TextColored(ImVec4(1, 1, 0, 1), "Real-time Mode");
+		}
+
 		ImGui::End();
 
 		ImGui::Render();
@@ -81,9 +124,17 @@ void Application::Run()
 			movement += camera.GetRight();
 
 		if (glm::length(movement) > 0.0f)
+		{
 			movement = glm::normalize(movement);
+			cameraChanged = true;
+		}
 
 		camera.Move(movement, m_DeltaTime);
+
+		if ((cameraChanged || sceneChanged) && m_Renderer->IsAccumulationEnabled())
+		{
+			m_Renderer->ResetAccumulation();
+		}
 
 		Render();
 		m_Engine->DrawFrame(m_Renderer->GetData());
@@ -148,7 +199,6 @@ void Application::HandleCursorInput()
 	}
 }
 
-
 void Application::Init(uint32_t width, uint32_t height, const char* title, bool resizable)
 {
 	if (!glfwInit())
@@ -160,7 +210,6 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, resizable);
 
-
 	GLFWwindow* tempWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
 	m_Window.reset(tempWindow);
 	m_Width = width;
@@ -168,7 +217,6 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 
 	m_Engine->SetWindow(m_Window.get());
 	m_Engine->Init();
-
 
 	glfwSetWindowUserPointer(m_Window.get(), this);
 	glfwSetInputMode(m_Window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -184,7 +232,6 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 
 	glfwGetCursorPos(m_Window.get(), &m_LastMouseX, &m_LastMouseY);
 }
-
 
 void Application::Cleanup()
 {

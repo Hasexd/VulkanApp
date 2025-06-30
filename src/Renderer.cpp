@@ -14,21 +14,23 @@ namespace
 	}
 	glm::vec3 RandomVec3(float lowerBound, float upperBound)
 	{
-		static std::random_device rd;
-		static std::mt19937 gen(rd());
-		std::uniform_real_distribution dis((lowerBound), (upperBound));
+		thread_local std::random_device rd;
+		thread_local std::mt19937 gen(rd());
+		std::uniform_real_distribution dis(lowerBound, upperBound);
 
-		return glm::vec3(dis(gen), dis(gen), dis(gen));
+		return {dis(gen), dis(gen), dis(gen)};
 	}
 
 	constexpr glm::vec4 c_BackgroundColor = { 0.1f, 0.2f, 0.4f, 0.0f };
-	constexpr int c_MaxRayBounces = 2;
+	constexpr int c_MaxRayBounces = 10;
 	constexpr float c_Epsilon = 0.0001f;
 }
 
 
 Renderer::Renderer(uint32_t width, uint32_t height) :
-	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height), m_PixelData(std::make_unique<uint32_t[]>(m_Width * m_Height))
+	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height),
+	m_PixelData(std::make_unique<uint32_t[]>(m_Width * m_Height)),
+	m_AccumulationBuffer(std::make_unique<glm::vec4[]>(m_Width * m_Height))
 {
 
 	Material pink = { {1.f, 0.f, 1.f, 1.f}, 0.1f, 0 };
@@ -41,33 +43,86 @@ Renderer::Renderer(uint32_t width, uint32_t height) :
 	m_Width = width;
 	m_Height = height;
 	m_AspectRatio = (float)m_Width / m_Height;
+	m_ThreadCount = std::thread::hardware_concurrency();
+
+	if (m_ThreadCount == 0)
+		m_ThreadCount = 4;
 }
 
 
 void Renderer::Resize(uint32_t width, uint32_t height)
 {
-	m_PixelData.reset(new uint32_t[width * height]);
 
 	m_Width = width;
 	m_Height = height;
-
 	m_AspectRatio = (float)m_Width / m_Height;
+
+	m_PixelData.reset(new uint32_t[width * height]);
+	m_AccumulationBuffer.reset(new glm::vec4[width * height]);
+	m_SampleCount = 0;
+
 }
 
 
 void Renderer::Render()
 {
-	for (uint32_t y = 0; y < m_Height; y++)
-	{
-		for (uint32_t x = 0; x < m_Width; x++)
-		{
-			glm::vec2 coord = { (float)x / m_Width, float(y) / m_Height };
-			coord = coord * 2.f - 1.f;
+	if (IsComplete())
+		return;
 
-			glm::vec4 color = RayGen(coord);
-			color = glm::clamp(color, glm::vec4(0.f), glm::vec4(1.f));
-			m_PixelData[x + y * m_Width] = ConvertToRGBA(color);
+	if (m_AccumulationEnabled)
+		m_SampleCount++;
+
+	const uint32_t tileSize = 64;
+	const uint32_t tilesX = (m_Width + tileSize - 1) / tileSize;
+	const uint32_t tilesY = (m_Height + tileSize - 1) / tileSize;
+	const uint32_t totalTiles = tilesX + tilesY;
+
+	std::vector<std::future<void>> futures;
+	futures.reserve(totalTiles);
+
+	for (uint32_t tileY = 0; tileY < tilesY; tileY++)
+	{
+		for (uint32_t tileX = 0; tileX < tilesX; tileX++)
+		{
+			futures.emplace_back(std::async(std::launch::async, [this, tileX, tileY, tileSize]()
+				{
+					const uint32_t startX = tileX * tileSize;
+					const uint32_t startY = tileY * tileSize;
+					const uint32_t endX = std::min(startX + tileSize, m_Width);
+					const uint32_t endY = std::min(startY + tileSize, m_Height);
+
+					for (uint32_t y = startY; y < endY; y++)
+					{
+						for (uint32_t x = startX; x < endX; x++)
+						{
+							glm::vec2 coord = { (float)x / m_Width, float(y) / m_Height };
+							coord = coord * 2.f - 1.f;
+
+							glm::vec4 color = RayGen(coord);
+							color = glm::clamp(color, glm::vec4(0.f), glm::vec4(1.f));
+
+							size_t idx = x + y * m_Width;
+
+							if (m_AccumulationEnabled)
+							{
+								m_AccumulationBuffer[idx] += color;
+								glm::vec4 avg = m_AccumulationBuffer[idx] / float(m_SampleCount);
+
+								m_PixelData[idx] = ConvertToRGBA(avg);
+							}
+							else
+							{
+								m_PixelData[idx] = ConvertToRGBA(color);
+							}
+						}
+					}
+				}));
 		}
+	}
+
+	for (auto& future : futures)
+	{
+		future.wait();
 	}
 }
 
@@ -111,6 +166,7 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 		else
 		{
 			color += c_BackgroundColor * multiplier;
+			break;
 		}
 	}
 
@@ -170,4 +226,11 @@ HitPayload Renderer::Miss(const Ray& ray) const
 	hit.HitDistance = -1.f;
 
 	return hit;
+}
+
+
+void Renderer::ResetAccumulation()
+{
+	std::fill_n(m_AccumulationBuffer.get(), m_Width * m_Height, glm::vec4(0.0f));
+	m_SampleCount = 0;
 }
