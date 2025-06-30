@@ -42,7 +42,7 @@ Renderer::Renderer(uint32_t width, uint32_t height) :
 
 	m_Width = width;
 	m_Height = height;
-	m_AspectRatio = (float)m_Width / m_Height;
+	m_AspectRatio = static_cast<float>(m_Width) / m_Height;
 	m_ThreadCount = std::thread::hardware_concurrency();
 
 	if (m_ThreadCount == 0)
@@ -55,7 +55,7 @@ void Renderer::Resize(uint32_t width, uint32_t height)
 
 	m_Width = width;
 	m_Height = height;
-	m_AspectRatio = (float)m_Width / m_Height;
+	m_AspectRatio = static_cast<float>(m_Width) / m_Height;
 
 	m_PixelData.reset(new uint32_t[width * height]);
 	m_AccumulationBuffer.reset(new glm::vec4[width * height]);
@@ -95,7 +95,7 @@ void Renderer::Render()
 					{
 						for (uint32_t x = startX; x < endX; x++)
 						{
-							glm::vec2 coord = { (float)x / m_Width, float(y) / m_Height };
+							glm::vec2 coord = { static_cast<float>(x) / m_Width, static_cast<float>(y) / m_Height };
 							coord = coord * 2.f - 1.f;
 
 							glm::vec4 color = RayGen(coord);
@@ -106,7 +106,7 @@ void Renderer::Render()
 							if (m_AccumulationEnabled)
 							{
 								m_AccumulationBuffer[idx] += color;
-								glm::vec4 avg = m_AccumulationBuffer[idx] / float(m_SampleCount);
+								glm::vec4 avg = m_AccumulationBuffer[idx] / static_cast<float>(m_SampleCount);
 
 								m_PixelData[idx] = ConvertToRGBA(avg);
 							}
