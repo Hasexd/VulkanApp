@@ -8,6 +8,11 @@
 #include <GLFW/glfw3.h>
 #include <gtc/type_ptr.hpp>
 
+#include <json.hpp>
+#include <filesystem>
+#include <fstream>
+#include <unordered_map>
+
 #include "VulkanEngine.h"
 #include "Renderer.h"
 #include "Scene.h"
@@ -25,6 +30,8 @@ private:
 	void HandleMouseInput(Camera& camera);
 	void HandleCursorInput();
 	void Cleanup();
+
+	void LoadJSONScenes();
 private:
 	uint32_t m_Width, m_Height;
 
@@ -42,6 +49,7 @@ private:
 	bool m_EscapePressed = false;
 	bool m_LeftClickPressed = false;
 
-	std::vector<std::shared_ptr<Scene>> m_Scenes;
-	uint32_t m_CurrentSceneIndex = 0;
+	std::unordered_map<std::string, std::shared_ptr<Scene>> m_Scenes;
+	//std::vector<std::shared_ptr<Scene>> m_Scenes;
+	std::string m_CurrentSceneName;
 };

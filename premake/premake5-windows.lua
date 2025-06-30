@@ -118,7 +118,8 @@ project "VulkanRayTracer"
         "vendors/VulkanMemoryAllocator/include",
         "vendors/imgui",
         "$(VULKAN_SDK)/Include",
-        "src/Vulkan"
+        "src/Vulkan",
+        "vendors/json/single_include"
 
     }
 

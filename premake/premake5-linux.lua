@@ -129,7 +129,8 @@ project "VulkanRayTracer"
         "vendors/VulkanMemoryAllocator/include",
         "vendors/imgui",
         vulkan .. "/include",
-        "src/Vulkan"
+        "src/Vulkan",
+        "vendors/json/single_include"
 
     }
 

@@ -12,22 +12,8 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 {
 	Init(width, height, title, resizable);
 
-	std::vector<Material> materials;
+	/*std::vector<Material> materials;
 	std::vector<Sphere> spheres;
-
-	materials.reserve(2);
-	materials.emplace_back(Material{ {1.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
-	materials.emplace_back(Material{ {0.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
-
-
-	spheres.reserve(2);
-	spheres.emplace_back(Sphere({ 0.f, 0.f, 5.f }, 2.f, 0));
-	spheres.emplace_back(Sphere({ 0.f, 102.f, 0.f }, 100.f, 1));
-
-	m_Scenes.emplace_back(std::make_shared<Scene>(spheres, materials));
-
-	spheres.clear();
-	materials.clear();
 
 	materials.emplace_back(Material{ {1.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
 	materials.emplace_back(Material{ {0.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
@@ -38,7 +24,9 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 	m_Scenes.emplace_back(std::make_shared<Scene>(spheres, materials));
 
 	if (!m_Scenes.empty())
-		m_Renderer->SetScene(m_Scenes[0]);
+		m_Renderer->SetScene(m_Scenes[0]);*/
+
+	LoadJSONScenes();
 }
 
 Application::~Application()
@@ -82,20 +70,29 @@ void Application::Run()
 		}
 		bool sceneChanged = false;
 
-		if (m_Scenes.size() > 1)
+		if (m_Scenes.size() > 0)
 		{
 			ImGui::Begin("Scene selection");
 
-			for (size_t i = 0; i < m_Scenes.size(); i++)
+			for (const auto& [name, scenePtr] : m_Scenes)
 			{
-				std::string label = "Scene " + std::to_string(i + 1);
+				bool isCurrent = (name == m_CurrentSceneName);
 
-				if (ImGui::Button(label.c_str()))
+				if (isCurrent)
+					ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+
+				if (ImGui::Button(name.c_str()))
 				{
-					m_CurrentSceneIndex = static_cast<int>(i);
-					m_Renderer->SetScene(m_Scenes[m_CurrentSceneIndex]);
+					m_CurrentSceneName = name;
+					m_Renderer->SetScene(scenePtr);
 					m_Renderer->ResetAccumulation();
 				}
+
+				if (isCurrent)
+				{
+					ImGui::PopStyleColor();
+				}
+				
 			}
 
 			ImGui::End();
@@ -286,6 +283,63 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 
 	glfwGetCursorPos(m_Window.get(), &m_LastMouseX, &m_LastMouseY);
 }
+
+void Application::LoadJSONScenes()
+{
+	using json = nlohmann::json;
+	std::filesystem::path path = "../scenes";
+
+	for (const auto& file : std::filesystem::directory_iterator(path))
+	{
+		if (file.path().extension().string() == ".json")
+		{
+			std::ifstream stream(file.path());
+			std::string fileName = file.path().filename().string();
+
+			std::string sceneName = fileName.substr(0, fileName.find('.'));
+
+			if (stream.is_open())
+			{
+				json fileContents = json::parse(stream);
+				Scene scene;
+
+				const auto& spheresJson = fileContents["Spheres"];
+				const auto& materialsJson = fileContents["Materials"];
+
+				if (materialsJson.type() == json::value_t::array)
+				{
+					for (const auto& jsonMaterial : materialsJson)
+					{
+						const glm::vec4 color = { jsonMaterial["Color"][0], jsonMaterial["Color"][1],
+							jsonMaterial["Color"][2], jsonMaterial["Color"][3]};
+
+						const float roughness = jsonMaterial["Roughness"];
+						const float metallic = jsonMaterial["Metallic"];
+
+						scene.Materials.emplace_back(color, roughness, metallic);
+					}
+				}
+
+				if (spheresJson.type() == json::value_t::array)
+				{
+					for (const auto& jsonSphere : spheresJson)
+					{
+						const glm::vec3 position = { jsonSphere["Position"][0], jsonSphere["Position"][1], jsonSphere["Position"][2]};
+						const float radius = jsonSphere["Radius"];
+						const uint32_t materialIndex = jsonSphere["MaterialIndex"];
+
+						scene.Spheres.emplace_back(position, radius, materialIndex);
+					}
+				}
+
+				m_Scenes[sceneName] = std::make_shared<Scene>(scene);
+
+				stream.close();
+			}
+		}
+	}
+}
+
 
 void Application::Cleanup()
 {
