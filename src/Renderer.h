@@ -11,6 +11,8 @@
 #include "Random.h"
 #include "Ray.h"
 #include "Sphere.h"
+#include "Scene.h"
+
 
 class Renderer
 {
@@ -27,13 +29,9 @@ public:
 	HitPayload Miss(const Ray& ray) const;
 
 	uint32_t* GetData() const { return m_PixelData.get(); };
-
-	std::vector<Sphere> GetSpheres() const { return m_Spheres; }
-	std::vector<Sphere>& GetSpheres()  { return m_Spheres; }
-
-	std::vector<Material> GetMaterials() const { return m_Materials; }
-
 	Camera& GetCamera() { return m_Camera; }
+	void SetScene(const std::shared_ptr<Scene>& scene) { m_CurrentScene = scene; }
+	std::shared_ptr<Scene> GetScene() const { return m_CurrentScene; }
 
 	void ResetAccumulation();
 	void SetAccumulation(bool enabled) { m_AccumulationEnabled = enabled; }
@@ -61,8 +59,7 @@ private:
 	bool m_AccumulationEnabled = false;
 
 	Camera m_Camera;
-	std::vector<Sphere> m_Spheres;
-	std::vector<Material> m_Materials;
+	std::shared_ptr<Scene> m_CurrentScene = nullptr;
 
 	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, -1.f, 1.f));
 	float m_AspectRatio;

@@ -10,6 +10,7 @@
 
 #include "VulkanEngine.h"
 #include "Renderer.h"
+#include "Scene.h"
 
 class Application
 {
@@ -40,4 +41,7 @@ private:
 	bool m_CursorVisible = false;
 	bool m_EscapePressed = false;
 	bool m_LeftClickPressed = false;
+
+	std::vector<std::shared_ptr<Scene>> m_Scenes;
+	uint32_t m_CurrentSceneIndex = 0;
 };

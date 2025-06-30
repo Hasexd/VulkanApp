@@ -11,6 +11,34 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 	m_Window(nullptr, glfwDestroyWindow), m_Renderer(std::make_unique<Renderer>(width, height)), m_Engine(std::make_unique<VulkanEngine>())
 {
 	Init(width, height, title, resizable);
+
+	std::vector<Material> materials;
+	std::vector<Sphere> spheres;
+
+	materials.reserve(2);
+	materials.emplace_back(Material{ {1.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
+	materials.emplace_back(Material{ {0.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
+
+
+	spheres.reserve(2);
+	spheres.emplace_back(Sphere({ 0.f, 0.f, 5.f }, 2.f, 0));
+	spheres.emplace_back(Sphere({ 0.f, 102.f, 0.f }, 100.f, 1));
+
+	m_Scenes.emplace_back(std::make_shared<Scene>(spheres, materials));
+
+	spheres.clear();
+	materials.clear();
+
+	materials.emplace_back(Material{ {1.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
+	materials.emplace_back(Material{ {0.f, 0.f, 1.f, 1.f}, 0.1f, 0 });
+
+	spheres.emplace_back(Sphere({ 0.f, 0.f, 5.f }, 2.f, 0));
+	spheres.emplace_back(Sphere({ 0.f, 0.f, 0.f }, 2, 1));
+
+	m_Scenes.emplace_back(std::make_shared<Scene>(spheres, materials));
+
+	if (!m_Scenes.empty())
+		m_Renderer->SetScene(m_Scenes[0]);
 }
 
 Application::~Application()
@@ -52,29 +80,52 @@ void Application::Run()
 			cameraChanged = true;
 			lastCameraPos = currentCameraPos;
 		}
-
-		ImGui::Begin("Scene");
-
 		bool sceneChanged = false;
-		for (size_t i = 0; i < m_Renderer->GetSpheres().size(); i++)
+
+		if (m_Scenes.size() > 1)
 		{
-			Sphere& sphere = m_Renderer->GetSpheres()[i];
+			ImGui::Begin("Scene selection");
 
-			ImGui::PushID(i);
+			for (size_t i = 0; i < m_Scenes.size(); i++)
+			{
+				std::string label = "Scene " + std::to_string(i + 1);
 
-			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
-				sceneChanged = true;
-			if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
-				sceneChanged = true;
-			if (ImGui::ColorEdit3("Color", glm::value_ptr(m_Renderer->GetMaterials()[sphere.GetMaterialIndex()].Color)))
-				sceneChanged = true;
-			if (ImGui::DragFloat("Roughness", &m_Renderer->GetMaterials()[sphere.GetMaterialIndex()].Roughness, 0.01f, 0.0f, 1.0f))
-				sceneChanged = true;
+				if (ImGui::Button(label.c_str()))
+				{
+					m_CurrentSceneIndex = static_cast<int>(i);
+					m_Renderer->SetScene(m_Scenes[m_CurrentSceneIndex]);
+					m_Renderer->ResetAccumulation();
+				}
+			}
 
-			ImGui::Separator();
-			ImGui::PopID();
+			ImGui::End();
 		}
-		ImGui::End();
+
+		
+		if (m_Renderer->GetScene() != nullptr)
+		{
+			ImGui::Begin("Scene");
+
+			for (size_t i = 0; i < m_Renderer->GetScene()->Spheres.size(); i++)
+			{
+				Sphere& sphere = m_Renderer->GetScene()->Spheres[i];
+
+				ImGui::PushID(static_cast<int>(i));
+
+				if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
+					sceneChanged = true;
+				if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
+					sceneChanged = true;
+				if (ImGui::ColorEdit3("Color", glm::value_ptr(m_Renderer->GetScene()->Materials[sphere.GetMaterialIndex()].Color)))
+					sceneChanged = true;
+				if (ImGui::DragFloat("Roughness", &m_Renderer->GetScene()->Materials[sphere.GetMaterialIndex()].Roughness, 0.01f, 0.0f, 1.0f))
+					sceneChanged = true;
+
+				ImGui::Separator();
+				ImGui::PopID();
+			}
+			ImGui::End();
+		}
 
 		ImGui::Begin("Information");
 		ImGui::Text("Rendering took: %.3fms", m_LastFrameRenderTime);
