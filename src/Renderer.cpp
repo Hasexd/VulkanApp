@@ -151,7 +151,9 @@ void Renderer::Render()
 
 glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 {
-	const float scalar = glm::tan(glm::radians(m_Camera.GetFieldOfView()) / 2);
+	const Camera& camera = m_CurrentScene->Camera;
+
+	const float scalar = glm::tan(glm::radians(camera.GetFieldOfView()) / 2);
 
 	glm::vec3 rayDirection(
 		coord.x * m_AspectRatio * scalar,
@@ -160,12 +162,12 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 	);
 
 	rayDirection = glm::normalize(
-		rayDirection.x * m_Camera.GetRight() +
-		rayDirection.y * m_Camera.GetUp() +
-		rayDirection.z * m_Camera.GetDirection()
+		rayDirection.x * camera.GetRight() +
+		rayDirection.y * camera.GetUp() +
+		rayDirection.z * camera.GetDirection()
 	);
 
-	Ray ray(m_Camera.GetPosition(), rayDirection);
+	Ray ray(camera.GetPosition(), rayDirection);
 
 	glm::vec3 light(0.f);
 	glm::vec3 throughput(1.f);

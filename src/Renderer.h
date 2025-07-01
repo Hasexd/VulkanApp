@@ -33,7 +33,6 @@ public:
 	HitPayload Miss(const Ray& ray) const;
 
 	uint32_t* GetData() const { return m_PixelData.get(); };
-	Camera& GetCamera() { return m_Camera; }
 	void SetScene(const std::shared_ptr<Scene>& scene) { m_CurrentScene = scene; }
 	std::shared_ptr<Scene> GetScene() const { return m_CurrentScene; }
 
@@ -60,9 +59,8 @@ private:
 	std::atomic<uint32_t> m_SampleCount = 0;
 	uint32_t m_MaxRayBounces;
 	uint32_t m_MaxSamples;
-	bool m_AccumulationEnabled = false;
+	bool m_AccumulationEnabled = true;
 
-	Camera m_Camera;
 	std::shared_ptr<Scene> m_CurrentScene = nullptr;
 
 	float m_AspectRatio;

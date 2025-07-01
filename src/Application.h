@@ -27,7 +27,9 @@ public:
 private:
 	void Render();
 	void Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized);
-	void HandleMouseInput(Camera& camera);
+
+	void HandleCameraRotate(Camera& camera);
+	void HandleCameraMovement(Camera& camera) const;
 	void HandleCursorInput();
 
 	void LoadJSONScenes();
@@ -51,5 +53,7 @@ private:
 
 	std::unordered_map<std::string, std::shared_ptr<Scene>> m_Scenes;
 	std::unordered_map<std::string, std::string> m_SceneFilePaths;
+
+	std::shared_ptr<Scene> m_CurrentScene;
 	std::string m_CurrentSceneName;
 };

@@ -13,12 +13,13 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 	Init(width, height, title, resizable, maximized);
 	LoadJSONScenes();
 
-	if (!defaultScene.empty())
+	if (defaultScene.compare("") != 0)
 	{
 		const auto& it = m_Scenes.find(defaultScene);
 
 		if (it != m_Scenes.end() && it->second != nullptr)
 		{
+			m_CurrentScene = it->second;
 			m_Renderer->SetScene(it->second);
 		}
 	}
@@ -28,8 +29,6 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 void Application::Run()
 {
 	double lastFrame = glfwGetTime();
-	Camera& camera = m_Renderer->GetCamera();
-	glm::vec3 lastCameraPos = camera.GetPosition();
 
 	while (!glfwWindowShouldClose(m_Window.get()))
 	{
@@ -50,19 +49,17 @@ void Application::Run()
 		ImGui::NewFrame();
 
 		HandleCursorInput();
-		HandleMouseInput(camera);
-
-		bool cameraChanged = false;
-		glm::vec3 currentCameraPos = camera.GetPosition();
-		if (glm::distance(currentCameraPos, lastCameraPos) > 0.001f)
-		{
-			cameraChanged = true;
-			lastCameraPos = currentCameraPos;
-		}
+		
+		
 		bool sceneChanged = false;
 
 		if (!m_Scenes.empty())
 		{
+			Camera& camera = m_CurrentScene->Camera;
+
+			HandleCameraRotate(camera);
+			HandleCameraMovement(camera);
+
 			ImGui::Begin("Scene selection");
 
 			for (const auto& [name, scenePtr] : m_Scenes)
@@ -75,6 +72,7 @@ void Application::Run()
 				if (ImGui::Button(name.c_str()))
 				{
 					m_CurrentSceneName = name;
+					m_CurrentScene = scenePtr;
 					m_Renderer->SetScene(scenePtr);
 					m_Renderer->ResetAccumulation();
 				}
@@ -90,7 +88,7 @@ void Application::Run()
 		}
 
 		
-		if (m_Renderer->GetScene() != nullptr)
+		if (m_CurrentScene)
 		{
 
 			ImGui::Begin("Scene Components");
@@ -163,29 +161,10 @@ void Application::Run()
 
 			ImGui::End();
 		}
-		
 
 		ImGui::Render();
 
-		glm::vec3 movement(0.0f);
-		if (glfwGetKey(m_Window.get(), GLFW_KEY_W) == GLFW_PRESS)
-			movement -= camera.GetDirection();
-		if (glfwGetKey(m_Window.get(), GLFW_KEY_S) == GLFW_PRESS)
-			movement += camera.GetDirection();
-		if (glfwGetKey(m_Window.get(), GLFW_KEY_A) == GLFW_PRESS)
-			movement -= camera.GetRight();
-		if (glfwGetKey(m_Window.get(), GLFW_KEY_D) == GLFW_PRESS)
-			movement += camera.GetRight();
-
-		if (glm::length(movement) > 0.0f)
-		{
-			movement = glm::normalize(movement);
-			cameraChanged = true;
-		}
-
-		camera.Move(movement, m_DeltaTime);
-
-		if ((cameraChanged || sceneChanged) && m_Renderer->IsAccumulationEnabled())
+		if (sceneChanged && m_Renderer->IsAccumulationEnabled())
 		{
 			m_Renderer->ResetAccumulation();
 		}
@@ -205,9 +184,35 @@ void Application::Render()
 	m_LastFrameRenderTime = duration.count();
 }
 
-void Application::HandleMouseInput(Camera& camera)
+void Application::HandleCameraMovement(Camera& camera) const
 {
-	if (m_CursorVisible)
+	if (!m_CurrentScene)
+		return;
+
+	glm::vec3 movement(0.0f);
+	if (glfwGetKey(m_Window.get(), GLFW_KEY_W) == GLFW_PRESS)
+		movement -= camera.GetDirection();
+	if (glfwGetKey(m_Window.get(), GLFW_KEY_S) == GLFW_PRESS)
+		movement += camera.GetDirection();
+	if (glfwGetKey(m_Window.get(), GLFW_KEY_A) == GLFW_PRESS)
+		movement -= camera.GetRight();
+	if (glfwGetKey(m_Window.get(), GLFW_KEY_D) == GLFW_PRESS)
+		movement += camera.GetRight();
+
+	if (glm::length(movement) > 0.0f)
+	{
+		movement = glm::normalize(movement);
+		camera.Move(movement, m_DeltaTime);
+
+		if (m_Renderer->IsAccumulationEnabled())
+			m_Renderer->ResetAccumulation();
+	}
+}
+
+
+void Application::HandleCameraRotate(Camera& camera)
+{
+	if (m_CursorVisible || !m_CurrentScene)
 		return;
 
 	double xpos, ypos;
@@ -220,12 +225,20 @@ void Application::HandleMouseInput(Camera& camera)
 		return;
 	}
 
-	double xOffset = m_LastMouseX - xpos;
-	double yOffset = m_LastMouseY - ypos;
-	m_LastMouseX = xpos;
-	m_LastMouseY = ypos;
+	if (m_LastMouseX != xpos && m_LastMouseY != ypos)
+	{
+		double xOffset = m_LastMouseX - xpos;
+		double yOffset = m_LastMouseY - ypos;
+		m_LastMouseX = xpos;
+		m_LastMouseY = ypos;
 
-	camera.Rotate(xOffset, yOffset);
+		camera.Rotate(xOffset, yOffset);
+
+		if (m_Renderer->IsAccumulationEnabled())
+			m_Renderer->ResetAccumulation();
+	}
+
+	
 }
 
 void Application::HandleCursorInput()
@@ -307,8 +320,6 @@ void Application::LoadJSONScenes()
 				json fileContents = json::parse(stream);
 				Scene scene;
 
-				
-
 				if (fileContents.contains("Camera"))
 				{
 					const auto& cameraJson = fileContents["Camera"];
@@ -321,17 +332,17 @@ void Application::LoadJSONScenes()
 							cameraJson["Position"][2]
 						};
 
-						m_Renderer->GetCamera().SetPosition(cameraPosition);
+						scene.Camera.SetPosition(cameraPosition);
 					}
 
 					if (cameraJson.contains("Rotation"))
 					{
-						m_Renderer->GetCamera().SetRotation(cameraJson["Rotation"][0], cameraJson["Rotation"][1]);
+						scene.Camera.SetRotation(cameraJson["Rotation"][0], cameraJson["Rotation"][1]);
 					}
 
 					if (cameraJson.contains("FieldOfView"))
 					{
-						m_Renderer->GetCamera().SetFieldOfView(cameraJson["FieldOfView"]);
+						scene.Camera.SetFieldOfView(cameraJson["FieldOfView"]);
 					}
 				}
 
@@ -437,7 +448,7 @@ void Application::SaveJSONScenes()
 
 		json cameraJson;
 
-		const Camera& camera = m_Renderer->GetCamera();
+		const Camera& camera = m_CurrentScene->Camera;
 
 		glm::vec3 cameraPos = camera.GetPosition();
 
