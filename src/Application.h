@@ -20,7 +20,7 @@
 class Application
 {
 public:
-	Application(uint32_t width, uint32_t height, const char* title, bool resizable);
+	Application(uint32_t width, uint32_t height, const char* title, bool resizable, const std::string& defaultScene = "");
 	~Application();
 
 	void Run();

@@ -7,11 +7,21 @@ static void ErrorCallback(int error, const char* description)
 	std::println("Error: {}\n", description);
 }
 
-Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable) :
+Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, const std::string& defaultScene) :
 	m_Window(nullptr, glfwDestroyWindow), m_Renderer(std::make_unique<Renderer>(width, height)), m_Engine(std::make_unique<VulkanEngine>())
 {
 	Init(width, height, title, resizable);
 	LoadJSONScenes();
+
+	if (!defaultScene.empty())
+	{
+		const auto& it = m_Scenes.find(defaultScene);
+
+		if (it != m_Scenes.end() && it->second != nullptr)
+		{
+			m_Renderer->SetScene(it->second);
+		}
+	}
 }
 
 Application::~Application()
