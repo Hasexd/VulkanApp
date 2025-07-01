@@ -97,11 +97,6 @@ void Application::Run()
 		if (m_Renderer->GetScene() != nullptr)
 		{
 
-			ImGui::Begin("Scene");
-
-
-			ImGui::End();
-
 			ImGui::Begin("Scene Components");
 
 			for (size_t i = 0; i < m_Renderer->GetScene()->Spheres.size(); i++)
@@ -345,7 +340,7 @@ void Application::LoadJSONScenes()
 }
 
 
-void Application::Cleanup()
+void Application::Cleanup() const
 {
 	m_Engine->Cleanup();
 	glfwTerminate();
