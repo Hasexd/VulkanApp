@@ -86,11 +86,18 @@ void Application::Run()
 		
 		if (m_Renderer->GetScene() != nullptr)
 		{
+
 			ImGui::Begin("Scene");
+
+
+			ImGui::End();
+
+			ImGui::Begin("Scene Components");
 
 			for (size_t i = 0; i < m_Renderer->GetScene()->Spheres.size(); i++)
 			{
 				Sphere& sphere = m_Renderer->GetScene()->Spheres[i];
+				Material& material = m_Renderer->GetScene()->Materials[sphere.GetMaterialIndex()];
 
 				ImGui::PushID(static_cast<int>(i));
 
@@ -98,54 +105,56 @@ void Application::Run()
 					sceneChanged = true;
 				if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
 					sceneChanged = true;
-				if (ImGui::ColorEdit3("Color", glm::value_ptr(m_Renderer->GetScene()->Materials[sphere.GetMaterialIndex()].Color)))
+				if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color)))
 					sceneChanged = true;
-				if (ImGui::DragFloat("Roughness", &m_Renderer->GetScene()->Materials[sphere.GetMaterialIndex()].Roughness, 0.01f, 0.0f, 1.0f))
+				if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
 					sceneChanged = true;
 
 				ImGui::Separator();
 				ImGui::PopID();
 			}
 			ImGui::End();
-		}
 
-		ImGui::Begin("Information");
-		ImGui::Text("Rendering took: %.3fms", m_LastFrameRenderTime);
 
-		ImGui::Separator();
-		ImGui::Text("Accumulation Settings");
+			ImGui::Begin("Information");
+			ImGui::Text("Rendering took: %.3fms", m_LastFrameRenderTime);
 
-		bool accumulationEnabled = m_Renderer->IsAccumulationEnabled();
-		if (ImGui::Checkbox("Enable Accumulation", &accumulationEnabled))
-		{
-			m_Renderer->SetAccumulation(accumulationEnabled);
-			if (!accumulationEnabled)
+			ImGui::Separator();
+			ImGui::Text("Accumulation Settings");
+
+			bool accumulationEnabled = m_Renderer->IsAccumulationEnabled();
+			if (ImGui::Checkbox("Enable Accumulation", &accumulationEnabled))
 			{
-				m_Renderer->ResetAccumulation();
-			}
-		}
-
-		ImGui::InputScalar("Amount of samples", ImGuiDataType_U32, &m_Renderer->GetMaxSamples());
-		ImGui::InputScalar("Maximum ray bounces", ImGuiDataType_U32, &m_Renderer->GetMaxRayBounces());
-
-		if (accumulationEnabled)
-		{
-			if (ImGui::Button("Reset Accumulation"))
-			{
-				m_Renderer->ResetAccumulation();
+				m_Renderer->SetAccumulation(accumulationEnabled);
+				if (!accumulationEnabled)
+				{
+					m_Renderer->ResetAccumulation();
+				}
 			}
 
-			if (m_Renderer->IsComplete())
-			{
-				ImGui::TextColored(ImVec4(0, 1, 0, 1), "Rendering Complete!");
-			}
-		}
-		else
-		{
-			ImGui::TextColored(ImVec4(1, 1, 0, 1), "Real-time Mode");
-		}
+			ImGui::InputScalar("Amount of samples", ImGuiDataType_U32, &m_Renderer->GetMaxSamples());
+			ImGui::InputScalar("Maximum ray bounces", ImGuiDataType_U32, &m_Renderer->GetMaxRayBounces());
 
-		ImGui::End();
+			if (accumulationEnabled)
+			{
+				if (ImGui::Button("Reset Accumulation"))
+				{
+					m_Renderer->ResetAccumulation();
+				}
+
+				if (m_Renderer->IsComplete())
+				{
+					ImGui::TextColored(ImVec4(0, 1, 0, 1), "Rendering Complete!");
+				}
+			}
+			else
+			{
+				ImGui::TextColored(ImVec4(1, 1, 0, 1), "Real-time Mode");
+			}
+
+			ImGui::End();
+		}
+		
 
 		ImGui::Render();
 
