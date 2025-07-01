@@ -29,9 +29,9 @@ private:
 	void Init(uint32_t width, uint32_t height, const char* title, bool resizable);
 	void HandleMouseInput(Camera& camera);
 	void HandleCursorInput();
-	void Cleanup() const;
 
 	void LoadJSONScenes();
+	void SaveJSONScenes();
 private:
 	uint32_t m_Width, m_Height;
 
@@ -50,5 +50,6 @@ private:
 	bool m_LeftClickPressed = false;
 
 	std::unordered_map<std::string, std::shared_ptr<Scene>> m_Scenes;
+	std::unordered_map<std::string, std::string> m_SceneFilePaths;
 	std::string m_CurrentSceneName;
 };

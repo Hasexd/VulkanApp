@@ -4,7 +4,11 @@
 
 struct Material
 {
-	glm::vec4 Color {1.f};
+	glm::vec3 Color {1.f};
 	float Roughness;
 	float Metallic = 0.f;
+	glm::vec3 EmissionColor{ 0.f };
+	float EmissionPower = 0.f;
+
+	[[nodiscard]] bool IsEmissive() const { return EmissionPower > 0.f; }
 };

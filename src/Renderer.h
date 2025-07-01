@@ -1,5 +1,9 @@
 #pragma once
 
+
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include <cstdint>
 #include <vector>
 #include <glm.hpp>
@@ -61,7 +65,6 @@ private:
 	Camera m_Camera;
 	std::shared_ptr<Scene> m_CurrentScene = nullptr;
 
-	glm::vec3 lightDir = glm::normalize(glm::vec3(-1.f, -1.f, 1.f));
 	float m_AspectRatio;
 
 	uint32_t m_ThreadCount;

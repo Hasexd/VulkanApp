@@ -24,10 +24,6 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 	}
 }
 
-Application::~Application()
-{
-	Cleanup();
-}
 
 void Application::Run()
 {
@@ -114,6 +110,14 @@ void Application::Run()
 					sceneChanged = true;
 				if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
 					sceneChanged = true;
+
+				if (material.IsEmissive())
+				{
+					if (ImGui::DragFloat3("Emission Color", glm::value_ptr(material.EmissionColor)))
+						sceneChanged = true;
+					if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
+						sceneChanged = true;
+				}
 
 				ImGui::Separator();
 				ImGui::PopID();
@@ -309,13 +313,23 @@ void Application::LoadJSONScenes()
 				{
 					for (const auto& jsonMaterial : materialsJson)
 					{
-						const glm::vec4 color = { jsonMaterial["Color"][0], jsonMaterial["Color"][1],
-							jsonMaterial["Color"][2], jsonMaterial["Color"][3]};
+						const glm::vec3 color = { jsonMaterial["Color"][0], jsonMaterial["Color"][1],
+							jsonMaterial["Color"][2]};
 
 						const float roughness = jsonMaterial["Roughness"];
 						const float metallic = jsonMaterial["Metallic"];
+						const float emissionPower = jsonMaterial["EmissionPower"];
 
-						scene.Materials.emplace_back(color, roughness, metallic);
+						if (emissionPower > 0.0f)
+						{
+							const glm::vec3 emissionColor = { jsonMaterial["EmissionColor"][0], jsonMaterial["EmissionColor"][1],
+								jsonMaterial["EmissionColor"][2] };
+							scene.Materials.emplace_back(color, roughness, metallic, emissionColor, emissionPower);
+						}
+						else
+						{
+							scene.Materials.emplace_back(color, roughness, metallic);
+						}
 					}
 				}
 
@@ -332,6 +346,7 @@ void Application::LoadJSONScenes()
 				}
 
 				m_Scenes[sceneName] = std::make_shared<Scene>(scene);
+				m_SceneFilePaths[sceneName] = file.path().string();
 
 				stream.close();
 			}
@@ -339,9 +354,78 @@ void Application::LoadJSONScenes()
 	}
 }
 
-
-void Application::Cleanup() const
+void Application::SaveJSONScenes()
 {
+	using json = nlohmann::json;
+
+	for (const auto& [sceneName, scenePtr] : m_Scenes)
+	{
+		auto pathIt = m_SceneFilePaths.find(sceneName);
+		if (pathIt == m_SceneFilePaths.end())
+		{
+			std::println("Warning: Could not find file path for scene '{}'", sceneName);
+			continue;
+		}
+
+		const std::string& filePath = pathIt->second;
+
+		json sceneJson;
+
+		json materialsJson = json::array();
+		for (const auto& material : scenePtr->Materials)
+		{
+			json materialJson;
+			materialJson["Color"] = { material.Color.r, material.Color.g, material.Color.b };
+			materialJson["Roughness"] = material.Roughness;
+			materialJson["Metallic"] = material.Metallic;
+			materialJson["EmissionPower"] = material.EmissionPower;
+
+			if (material.IsEmissive())
+			{
+				materialJson["EmissionColor"] = { material.EmissionColor.r, material.EmissionColor.g, material.EmissionColor.b };
+			}
+			else
+			{
+				materialJson["EmissionColor"] = { 0.0f, 0.0f, 0.0f };
+			}
+
+			materialsJson.push_back(materialJson);
+		}
+		sceneJson["Materials"] = materialsJson;
+
+		json spheresJson = json::array();
+		for (const auto& sphere : scenePtr->Spheres)
+		{
+			json sphereJson;
+			glm::vec3 pos = sphere.GetPosition();
+			sphereJson["Position"] = { pos.x, pos.y, pos.z };
+			sphereJson["Radius"] = sphere.GetRadius();
+			sphereJson["MaterialIndex"] = sphere.GetMaterialIndex();
+
+			spheresJson.push_back(sphereJson);
+		}
+		sceneJson["Spheres"] = spheresJson;
+
+		std::ofstream outFile(filePath);
+		if (outFile.is_open())
+		{
+			outFile << sceneJson.dump(4);
+			outFile.close();
+			std::println("Saved scene '{}' to '{}'", sceneName, filePath);
+		}
+		else
+		{
+			std::println("Error: Could not open file '{}' for writing", filePath);
+		}
+	}
+}
+
+
+
+Application::~Application()
+{
+	SaveJSONScenes();
 	m_Engine->Cleanup();
 	glfwTerminate();
 }
+

@@ -6,7 +6,7 @@ Camera::Camera() : m_Position(0.f, 0.f, 1.f) {
 
 void Camera::Rotate(double xOffset, double yOffset) {
     m_Yaw += xOffset * m_Sensitivity;
-    m_Pitch += yOffset * m_Sensitivity;
+    m_Pitch -= yOffset * m_Sensitivity;
     m_Pitch = glm::clamp(m_Pitch, -89.f, 89.f);
     RecalculateVectors();
 }

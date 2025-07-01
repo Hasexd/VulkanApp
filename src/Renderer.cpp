@@ -21,7 +21,26 @@ namespace
 		return {dis(gen), dis(gen), dis(gen)};
 	}
 
-	constexpr glm::vec4 c_BackgroundColor = { 0.1f, 0.2f, 0.4f, 0.0f };
+	glm::vec3 RandomCosineWeightedHemisphere(const glm::vec3& normal)
+	{
+		thread_local std::random_device rd;
+		thread_local std::mt19937 gen(rd());
+		std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+
+		float r1 = dis(gen);
+		float r2 = dis(gen);
+
+		float cosTheta = std::sqrt(r1);
+		float sinTheta = std::sqrt(1.0f - r1);
+		float phi = 2.0f * M_PI * r2;
+
+		glm::vec3 w = normal;
+		glm::vec3 u = glm::normalize(glm::cross((std::abs(w.x) > 0.1f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0)), w));
+		glm::vec3 v = glm::cross(w, u);
+
+		return cosTheta * w + sinTheta * std::cos(phi) * u + sinTheta * std::sin(phi) * v;
+	}
+	constexpr glm::vec3 c_BackgroundColor = { 0.1f, 0.2f, 0.4f };
 	constexpr float c_Epsilon = 0.0001f;
 }
 
@@ -96,6 +115,7 @@ void Renderer::Render()
 						{
 							glm::vec2 coord = { static_cast<float>(x) / m_Width, static_cast<float>(y) / m_Height };
 							coord = coord * 2.f - 1.f;
+							coord.y = -coord.y;
 
 							glm::vec4 color = RayGen(coord);
 							color = glm::clamp(color, glm::vec4(0.f), glm::vec4(1.f));
@@ -143,8 +163,9 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 	);
 
 	Ray ray(m_Camera.GetPosition(), rayDirection);
-	glm::vec4 color = c_BackgroundColor;
-	float multiplier = 1.f;
+
+	glm::vec3 light(0.f);
+	glm::vec3 throughput(1.f);
 
 	for (size_t i = 0; i < m_MaxRayBounces; i++)
 	{
@@ -152,24 +173,23 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 
 		if (hit.HitDistance > 0.f)
 		{
-			const float angle = glm::max(glm::dot(hit.WorldNormal, -lightDir), 0.f);
 			const Material& material = m_CurrentScene->Materials[m_CurrentScene->Spheres[hit.ObjectIndex].GetMaterialIndex()];
 
-			const glm::vec4 sphereColor = material.Color * angle;
-			color += sphereColor * multiplier;
-			multiplier *= 0.5f;
+			light += material.EmissionColor * material.EmissionPower;
+			throughput *= material.Color;
+
 
 			ray.Origin = hit.WorldPosition + hit.WorldNormal * c_Epsilon;
-			ray.Direction = glm::reflect(ray.Direction, hit.WorldNormal + material.Roughness * RandomVec3(-0.5f, 0.5f));
+			ray.Direction = RandomCosineWeightedHemisphere(hit.WorldNormal);
 		}
 		else
 		{
-			color += c_BackgroundColor * multiplier;
+			//light += c_BackgroundColor * throughput;
 			break;
 		}
 	}
 
-	return color;
+	return {light, 1.f};
 }
 
 HitPayload Renderer::TraceRay(const Ray& ray) const

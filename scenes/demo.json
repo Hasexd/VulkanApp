@@ -1,28 +1,78 @@
 {
-  "Materials": [
-    {
-      "Color": [ 1.0, 0.0, 1.0, 1.0 ],
-      "Roughness": 0.0,
-      "Metallic": 0.0
-    },
-
-    {
-      "Color": [ 0.0, 0.0, 1.0, 1.0 ],
-      "Roughness": 0.1,
-      "Metallic": 0  
-    }
-  ],
-
-  "Spheres": [
-    {
-      "Position": [ 0.0, 0.0, 5.0 ],
-      "Radius": 2.0,
-      "MaterialIndex": 0
-    },
-    {
-      "Position": [ 0.0, 102.0, 0.0 ],
-      "Radius": 100.0,
-      "MaterialIndex":  1
-    }
-  ]
+    "Materials": [
+        {
+            "Color": [
+                1.0,
+                0.0,
+                1.0
+            ],
+            "EmissionColor": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "EmissionPower": 0.0,
+            "Metallic": 0.0,
+            "Roughness": 0.0
+        },
+        {
+            "Color": [
+                0.0,
+                0.0,
+                1.0
+            ],
+            "EmissionColor": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "EmissionPower": 0.0,
+            "Metallic": 0.0,
+            "Roughness": 0.10000000149011612
+        },
+        {
+            "Color": [
+                1.0,
+                0.0,
+                0.0
+            ],
+            "EmissionColor": [
+                1.0,
+                0.0,
+                0.0
+            ],
+            "EmissionPower": 26.5,
+            "Metallic": 0.0,
+            "Roughness": 0.0
+        }
+    ],
+    "Spheres": [
+        {
+            "MaterialIndex": 0,
+            "Position": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Radius": 2.0
+        },
+        {
+            "MaterialIndex": 1,
+            "Position": [
+                0.0,
+                -103.0999984741211,
+                0.0
+            ],
+            "Radius": 100.0
+        },
+        {
+            "MaterialIndex": 2,
+            "Position": [
+                15.199999809265137,
+                13.0,
+                0.0
+            ],
+            "Radius": 8.800000190734863
+        }
+    ]
 }
