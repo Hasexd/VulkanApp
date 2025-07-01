@@ -14,7 +14,14 @@ public:
 	glm::vec3 GetRight() const { return m_RightVector; }
 	glm::vec3 GetUp() const { return m_UpVector; }
 	float GetFieldOfView() const { return m_FieldOfView; }
+	float GetPitch() const { return m_Pitch; }
+	float GetYaw() const { return m_Yaw; }
 
+	void SetPosition(const glm::vec3& position) { m_Position = position; RecalculateVectors(); }
+	void SetFieldOfView(float fov) { m_FieldOfView = fov; }
+	void SetRotation(float pitch, float yaw) { m_Yaw = yaw; m_Pitch = pitch; RecalculateVectors(); }
+
+	
 private:
 	void RecalculateVectors();
 private:

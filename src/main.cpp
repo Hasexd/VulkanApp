@@ -1,6 +1,6 @@
 #include "Application.h"
 int main()
 {
-	Application app(1080, 720, "Vulkan App", true, "demo");
+	Application app(1920, 1080, "Ray Tracer", true, true, "demo");
 	app.Run();
 }

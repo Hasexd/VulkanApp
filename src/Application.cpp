@@ -7,10 +7,10 @@ static void ErrorCallback(int error, const char* description)
 	std::println("Error: {}\n", description);
 }
 
-Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, const std::string& defaultScene) :
+Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized, const std::string& defaultScene) :
 	m_Window(nullptr, glfwDestroyWindow), m_Renderer(std::make_unique<Renderer>(width, height)), m_Engine(std::make_unique<VulkanEngine>())
 {
-	Init(width, height, title, resizable);
+	Init(width, height, title, resizable, maximized);
 	LoadJSONScenes();
 
 	if (!defaultScene.empty())
@@ -253,7 +253,7 @@ void Application::HandleCursorInput()
 	}
 }
 
-void Application::Init(uint32_t width, uint32_t height, const char* title, bool resizable)
+void Application::Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized)
 {
 	if (!glfwInit())
 	{
@@ -263,6 +263,7 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 	glfwSetErrorCallback(ErrorCallback);
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, resizable);
+	glfwWindowHint(GLFW_MAXIMIZED, maximized);
 
 	GLFWwindow* tempWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
 	m_Window.reset(tempWindow);
@@ -305,6 +306,34 @@ void Application::LoadJSONScenes()
 			{
 				json fileContents = json::parse(stream);
 				Scene scene;
+
+				
+
+				if (fileContents.contains("Camera"))
+				{
+					const auto& cameraJson = fileContents["Camera"];
+
+					if (cameraJson.contains("Position"))
+					{
+						glm::vec3 cameraPosition = {
+							cameraJson["Position"][0],
+							cameraJson["Position"][1],
+							cameraJson["Position"][2]
+						};
+
+						m_Renderer->GetCamera().SetPosition(cameraPosition);
+					}
+
+					if (cameraJson.contains("Rotation"))
+					{
+						m_Renderer->GetCamera().SetRotation(cameraJson["Rotation"][0], cameraJson["Rotation"][1]);
+					}
+
+					if (cameraJson.contains("FieldOfView"))
+					{
+						m_Renderer->GetCamera().SetFieldOfView(cameraJson["FieldOfView"]);
+					}
+				}
 
 				const auto& spheresJson = fileContents["Spheres"];
 				const auto& materialsJson = fileContents["Materials"];
@@ -405,6 +434,18 @@ void Application::SaveJSONScenes()
 			spheresJson.push_back(sphereJson);
 		}
 		sceneJson["Spheres"] = spheresJson;
+
+		json cameraJson;
+
+		const Camera& camera = m_Renderer->GetCamera();
+
+		glm::vec3 cameraPos = camera.GetPosition();
+
+		cameraJson["Position"] = { cameraPos.x, cameraPos.y, cameraPos.z };
+		cameraJson["Rotation"] = { camera.GetPitch(), camera.GetYaw() };
+		cameraJson["FieldOfView"] = camera.GetFieldOfView();
+
+		sceneJson["Camera"] = cameraJson;
 
 		std::ofstream outFile(filePath);
 		if (outFile.is_open())

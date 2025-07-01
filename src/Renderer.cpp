@@ -12,23 +12,26 @@ namespace
 
 		return (a << 24) | (b << 16) | (g << 8) | r;
 	}
-	glm::vec3 RandomVec3(float lowerBound, float upperBound)
-	{
-		thread_local std::random_device rd;
-		thread_local std::mt19937 gen(rd());
-		std::uniform_real_distribution dis(lowerBound, upperBound);
 
-		return {dis(gen), dis(gen), dis(gen)};
+	uint32_t PcgHash(uint32_t input)
+	{
+		uint32_t state = input * 747796405u + 2891336453u;
+		uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+
+		return (word >> 22u) ^ word;
 	}
 
-	glm::vec3 RandomCosineWeightedHemisphere(const glm::vec3& normal)
+	float RandomFloat(uint32_t& seed)
 	{
-		thread_local std::random_device rd;
-		thread_local std::mt19937 gen(rd());
-		std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+		seed = PcgHash(seed);
+		return static_cast<float>(seed) / static_cast<float>(std::numeric_limits<uint32_t>::max());
+	}
 
-		float r1 = dis(gen);
-		float r2 = dis(gen);
+	glm::vec3 RandomCosineWeightedHemisphere(const glm::vec3& normal, uint32_t& seed)
+	{
+
+		float r1 = RandomFloat(seed);
+		float r2 = RandomFloat(seed);
 
 		float cosTheta = std::sqrt(r1);
 		float sinTheta = std::sqrt(1.0f - r1);
@@ -167,6 +170,10 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 	glm::vec3 light(0.f);
 	glm::vec3 throughput(1.f);
 
+	uint32_t seed = static_cast<uint32_t>(coord.x * 1000000.0f) +
+		static_cast<uint32_t>(coord.y * 1000000.0f) * m_Width +
+		m_SampleCount * 982451653u;
+
 	for (size_t i = 0; i < m_MaxRayBounces; i++)
 	{
 		const HitPayload& hit = TraceRay(ray);
@@ -180,7 +187,7 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 
 
 			ray.Origin = hit.WorldPosition + hit.WorldNormal * c_Epsilon;
-			ray.Direction = RandomCosineWeightedHemisphere(hit.WorldNormal);
+			ray.Direction = RandomCosineWeightedHemisphere(hit.WorldNormal, seed);
 		}
 		else
 		{

@@ -20,13 +20,13 @@
 class Application
 {
 public:
-	Application(uint32_t width, uint32_t height, const char* title, bool resizable, const std::string& defaultScene = "");
+	Application(uint32_t width, uint32_t height, const char* title, bool resizable = true, bool maximized = false, const std::string& defaultScene = "");
 	~Application();
 
 	void Run();
 private:
 	void Render();
-	void Init(uint32_t width, uint32_t height, const char* title, bool resizable);
+	void Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized);
 	void HandleMouseInput(Camera& camera);
 	void HandleCursorInput();
 
