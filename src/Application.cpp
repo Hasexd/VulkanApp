@@ -351,6 +351,8 @@ void Application::LoadJSONScenes()
 
 				if (materialsJson.type() == json::value_t::array)
 				{
+					scene.Materials.reserve(materialsJson.size());
+
 					for (const auto& jsonMaterial : materialsJson)
 					{
 						const glm::vec3 color = { jsonMaterial["Color"][0], jsonMaterial["Color"][1],
@@ -375,6 +377,7 @@ void Application::LoadJSONScenes()
 
 				if (spheresJson.type() == json::value_t::array)
 				{
+					scene.Spheres.reserve(spheresJson.size());
 					for (const auto& jsonSphere : spheresJson)
 					{
 						const glm::vec3 position = { jsonSphere["Position"][0], jsonSphere["Position"][1], jsonSphere["Position"][2]};
