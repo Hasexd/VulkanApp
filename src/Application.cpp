@@ -111,7 +111,7 @@ void Application::Run()
 
 				if (material.IsEmissive())
 				{
-					if (ImGui::DragFloat3("Emission Color", glm::value_ptr(material.EmissionColor)))
+					if (ImGui::ColorEdit3("Emission Color", glm::value_ptr(material.EmissionColor)))
 						sceneChanged = true;
 					if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
 						sceneChanged = true;
