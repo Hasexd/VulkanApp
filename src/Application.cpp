@@ -30,7 +30,7 @@ void Application::Run()
 {
 	double lastFrame = glfwGetTime();
 
-	while (!glfwWindowShouldClose(m_Window.get()))
+	while (m_IsRunning)
 	{
 		double currentFrame = glfwGetTime();
 		m_DeltaTime = currentFrame - lastFrame;
@@ -290,11 +290,19 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 	glfwSetInputMode(m_Window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwSetFramebufferSizeCallback(m_Window.get(), [](GLFWwindow* window, int width, int height) -> void
 		{
-			if (const auto instance = static_cast<Application*>(glfwGetWindowUserPointer(window)))
+			if (const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window)))
 			{
-				instance->m_Engine->ResizeRequested = true;
-				instance->m_Width = width;
-				instance->m_Height = height;
+				app->m_Engine->ResizeRequested = true;
+				app->m_Width = width;
+				app->m_Height = height;
+			}
+		});
+
+	glfwSetWindowCloseCallback(m_Window.get(), [](GLFWwindow* window) -> void
+		{
+			if (const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window)))
+			{
+				app->m_IsRunning = false;
 			}
 		});
 
