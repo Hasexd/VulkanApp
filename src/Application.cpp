@@ -52,39 +52,43 @@ void Application::Run()
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
-
+		ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 		HandleCursorInput();
 		
 		
 		bool sceneChanged = false;
-
 		if (!m_Scenes.empty())
 		{
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetColorU32(ImVec4(0.10f, 0.10f, 0.12f, 1.0f)));
+
 			ImGui::Begin("Scene selection");
+
+			ImGui::BeginChild("##ScenesList", ImVec2(0, 200), true, ImGuiWindowFlags_NoNavFocus);
+
+			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.25f, 0.30f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.30f, 0.35f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.35f, 0.40f, 1.0f));
 
 			for (const auto& [name, scenePtr] : m_Scenes)
 			{
 				bool isCurrent = (name == m_CurrentSceneName);
-
-				if (isCurrent)
-					ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-
-				if (ImGui::Button(name.c_str()))
+				if (ImGui::Selectable(name.c_str(), isCurrent, ImGuiSelectableFlags_SpanAllColumns))
 				{
 					m_CurrentSceneName = name;
 					m_CurrentScene = scenePtr;
 					m_Renderer->SetScene(scenePtr);
 					m_Renderer->ResetAccumulation();
 				}
-
-				if (isCurrent)
-				{
-					ImGui::PopStyleColor();
-				}
-				
 			}
 
+			ImGui::PopStyleColor(3);
+			ImGui::EndChild();
 			ImGui::End();
+
+			ImGui::PopStyleColor();
+			ImGui::PopStyleVar(2);
 		}
 
 		
@@ -522,16 +526,9 @@ void Application::SaveJSONScenes()
 		{
 			outFile << sceneJson.dump(4);
 			outFile.close();
-			std::println("Saved scene '{}' to '{}'", sceneName, filePath);
-		}
-		else
-		{
-			std::println("Error: Could not open file '{}' for writing", filePath);
 		}
 	}
 }
-
-
 
 Application::~Application()
 {

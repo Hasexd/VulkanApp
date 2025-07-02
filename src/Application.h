@@ -34,6 +34,7 @@ private:
 
 	void LoadJSONScenes();
 	void SaveJSONScenes();
+
 private:
 	uint32_t m_Width, m_Height;
 

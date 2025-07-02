@@ -82,8 +82,6 @@ private:
 	VkCommandBuffer m_ImmediateCommandBuffer;
 	VkCommandPool m_ImmediateCommandPool;
 
-
-
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 	GLFWwindow* m_Window;
 
