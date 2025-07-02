@@ -151,7 +151,7 @@ void Renderer::Render()
 
 glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 {
-	const Camera& camera = m_CurrentScene->Camera;
+	const Camera& camera = m_CurrentScene->GetActiveCamera();
 
 	const float scalar = glm::tan(glm::radians(camera.GetFieldOfView()) / 2);
 
@@ -182,7 +182,7 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 
 		if (hit.HitDistance > 0.f)
 		{
-			const Material& material = m_CurrentScene->Materials[m_CurrentScene->Spheres[hit.ObjectIndex].GetMaterialIndex()];
+			const Material& material = m_CurrentScene->GetMaterials()[m_CurrentScene->GetSpheres()[hit.ObjectIndex].GetMaterialIndex()];
 
 			light += material.EmissionColor * material.EmissionPower;
 			throughput *= material.Color;
@@ -208,9 +208,9 @@ HitPayload Renderer::TraceRay(const Ray& ray) const
 
 	glm::vec3 hitNear{}, hitFar{};
 
-	for (size_t i = 0; i < m_CurrentScene->Spheres.size(); i++)
+	for (size_t i = 0; i < m_CurrentScene->GetSpheres().size(); i++)
 	{
-		if (m_CurrentScene->Spheres[i].Intersects(ray, hitNear, hitFar))
+		if (m_CurrentScene->GetSpheres()[i].Intersects(ray, hitNear, hitFar))
 		{
 			const float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
 			const float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
@@ -243,7 +243,7 @@ HitPayload Renderer::ClosestHit(const Ray& ray, float hitDistance, uint32_t obje
 	hit.HitDistance = hitDistance;
 	hit.ObjectIndex = objectIndex;
 	hit.WorldPosition = ray.Origin + ray.Direction * hitDistance;
-	hit.WorldNormal = glm::normalize(hit.WorldPosition - m_CurrentScene->Spheres[objectIndex].GetPosition());
+	hit.WorldNormal = glm::normalize(hit.WorldPosition - m_CurrentScene->GetSpheres()[objectIndex].GetPosition());
 
 	return hit;
 }

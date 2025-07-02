@@ -29,7 +29,7 @@ private:
 	void Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized);
 
 	void HandleCameraRotate(Camera& camera);
-	void HandleCameraMovement(Camera& camera) const;
+	void HandleKeyboardInput(Camera& camera);
 	void HandleCursorInput();
 
 	void LoadJSONScenes();
@@ -52,6 +52,8 @@ private:
 	bool m_CursorVisible = false;
 	bool m_EscapePressed = false;
 	bool m_LeftClickPressed = false;
+	bool m_QPressed = false;
+	bool m_EPressed = false;
 
 	std::unordered_map<std::string, std::shared_ptr<Scene>> m_Scenes;
 	std::unordered_map<std::string, std::string> m_SceneFilePaths;

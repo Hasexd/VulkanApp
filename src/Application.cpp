@@ -2,10 +2,15 @@
 
 #include "imgui_internal.h"
 
-static void ErrorCallback(int error, const char* description)
+
+namespace
 {
-	std::println("Error: {}\n", description);
+	void ErrorCallback(int error, const char* description)
+	{
+		std::println("Error: {}\n", description);
+	}
 }
+
 
 Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized, const std::string& defaultScene) :
 	m_Window(nullptr, glfwDestroyWindow), m_Renderer(std::make_unique<Renderer>(width, height)), m_Engine(std::make_unique<VulkanEngine>())
@@ -13,7 +18,7 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 	Init(width, height, title, resizable, maximized);
 	LoadJSONScenes();
 
-	if (defaultScene.compare("") != 0)
+	if (!defaultScene.empty())
 	{
 		const auto& it = m_Scenes.find(defaultScene);
 
@@ -55,11 +60,6 @@ void Application::Run()
 
 		if (!m_Scenes.empty())
 		{
-			Camera& camera = m_CurrentScene->Camera;
-
-			HandleCameraRotate(camera);
-			HandleCameraMovement(camera);
-
 			ImGui::Begin("Scene selection");
 
 			for (const auto& [name, scenePtr] : m_Scenes)
@@ -91,12 +91,17 @@ void Application::Run()
 		if (m_CurrentScene)
 		{
 
+			Camera& camera = m_CurrentScene->GetActiveCamera();
+
+			HandleCameraRotate(camera);
+			HandleKeyboardInput(camera);
+
 			ImGui::Begin("Scene Components");
 
-			for (size_t i = 0; i < m_Renderer->GetScene()->Spheres.size(); i++)
+			for (size_t i = 0; i < m_Renderer->GetScene()->GetSpheres().size(); i++)
 			{
-				Sphere& sphere = m_Renderer->GetScene()->Spheres[i];
-				Material& material = m_Renderer->GetScene()->Materials[sphere.GetMaterialIndex()];
+				Sphere& sphere = m_Renderer->GetScene()->GetSpheres()[i];
+				Material& material = m_Renderer->GetScene()->GetMaterials()[sphere.GetMaterialIndex()];
 
 				ImGui::PushID(static_cast<int>(i));
 
@@ -184,10 +189,34 @@ void Application::Render()
 	m_LastFrameRenderTime = duration.count();
 }
 
-void Application::HandleCameraMovement(Camera& camera) const
+void Application::HandleKeyboardInput(Camera& camera)
 {
 	if (!m_CurrentScene)
 		return;
+
+	if (glfwGetKey(m_Window.get(), GLFW_KEY_Q) == GLFW_PRESS && !m_QPressed)
+	{
+		m_CurrentScene->SwitchCamera(-1);
+		m_QPressed = true;
+		if (m_Renderer->IsAccumulationEnabled())
+			m_Renderer->ResetAccumulation();
+	}
+	else if (glfwGetKey(m_Window.get(), GLFW_KEY_Q) == GLFW_RELEASE)
+	{
+		m_QPressed = false;
+	}
+
+	if (glfwGetKey(m_Window.get(), GLFW_KEY_E) == GLFW_PRESS && !m_EPressed)
+	{
+		m_CurrentScene->SwitchCamera(1);
+		m_EPressed = true;
+		if (m_Renderer->IsAccumulationEnabled())
+			m_Renderer->ResetAccumulation();
+	}
+	else if (glfwGetKey(m_Window.get(), GLFW_KEY_E) == GLFW_RELEASE)
+	{
+		m_EPressed = false;
+	}
 
 	glm::vec3 movement(0.0f);
 	if (glfwGetKey(m_Window.get(), GLFW_KEY_W) == GLFW_PRESS)
@@ -198,6 +227,7 @@ void Application::HandleCameraMovement(Camera& camera) const
 		movement -= camera.GetRight();
 	if (glfwGetKey(m_Window.get(), GLFW_KEY_D) == GLFW_PRESS)
 		movement += camera.GetRight();
+
 
 	if (glm::length(movement) > 0.0f)
 	{
@@ -327,31 +357,50 @@ void Application::LoadJSONScenes()
 			{
 				json fileContents = json::parse(stream);
 				Scene scene;
+				const auto& camerasJson = fileContents["Cameras"];
 
-				if (fileContents.contains("Camera"))
+
+				if (camerasJson.type() == json::value_t::array)
 				{
-					const auto& cameraJson = fileContents["Camera"];
-
-					if (cameraJson.contains("Position"))
+					scene.GetCameras().reserve(camerasJson.size());
+					for (const auto& cameraJson : camerasJson)
 					{
-						glm::vec3 cameraPosition = {
-							cameraJson["Position"][0],
-							cameraJson["Position"][1],
-							cameraJson["Position"][2]
-						};
+						glm::vec3 position;
+						float yaw, pitch;
+						float fov;
 
-						scene.Camera.SetPosition(cameraPosition);
-					}
+						if (cameraJson.contains("Position"))
+						{
+							glm::vec3 cameraPosition = {
+								cameraJson["Position"][0],
+								cameraJson["Position"][1],
+								cameraJson["Position"][2]
+							};
 
-					if (cameraJson.contains("Rotation"))
-					{
-						scene.Camera.SetRotation(cameraJson["Rotation"][0], cameraJson["Rotation"][1]);
-					}
+							position = cameraPosition;
+						}
 
-					if (cameraJson.contains("FieldOfView"))
-					{
-						scene.Camera.SetFieldOfView(cameraJson["FieldOfView"]);
+						if (cameraJson.contains("Rotation"))
+						{
+							yaw = cameraJson["Rotation"][0];
+							pitch = cameraJson["Rotation"][1];
+						}
+
+						if (cameraJson.contains("FieldOfView"))
+						{
+							fov = cameraJson["FieldOfView"];
+						}
+						scene.GetCameras().emplace_back(position, yaw, pitch, fov);
 					}
+				}
+
+				if (fileContents.contains("ActiveCameraIndex"))
+				{
+					scene.SetActiveCameraIndex(fileContents["ActiveCameraIndex"]);
+				}
+				else
+				{
+					scene.SetActiveCameraIndex(0);
 				}
 
 				const auto& spheresJson = fileContents["Spheres"];
@@ -359,7 +408,7 @@ void Application::LoadJSONScenes()
 
 				if (materialsJson.type() == json::value_t::array)
 				{
-					scene.Materials.reserve(materialsJson.size());
+					scene.GetMaterials().reserve(materialsJson.size());
 
 					for (const auto& jsonMaterial : materialsJson)
 					{
@@ -374,25 +423,25 @@ void Application::LoadJSONScenes()
 						{
 							const glm::vec3 emissionColor = { jsonMaterial["EmissionColor"][0], jsonMaterial["EmissionColor"][1],
 								jsonMaterial["EmissionColor"][2] };
-							scene.Materials.emplace_back(color, roughness, metallic, emissionColor, emissionPower);
+							scene.GetMaterials().emplace_back(color, roughness, metallic, emissionColor, emissionPower);
 						}
 						else
 						{
-							scene.Materials.emplace_back(color, roughness, metallic);
+							scene.GetMaterials().emplace_back(color, roughness, metallic);
 						}
 					}
 				}
 
 				if (spheresJson.type() == json::value_t::array)
 				{
-					scene.Spheres.reserve(spheresJson.size());
+					scene.GetSpheres().reserve(spheresJson.size());
 					for (const auto& jsonSphere : spheresJson)
 					{
 						const glm::vec3 position = { jsonSphere["Position"][0], jsonSphere["Position"][1], jsonSphere["Position"][2]};
 						const float radius = jsonSphere["Radius"];
 						const uint32_t materialIndex = jsonSphere["MaterialIndex"];
 
-						scene.Spheres.emplace_back(position, radius, materialIndex);
+						scene.GetSpheres().emplace_back(position, radius, materialIndex);
 					}
 				}
 
@@ -423,7 +472,7 @@ void Application::SaveJSONScenes()
 		json sceneJson;
 
 		json materialsJson = json::array();
-		for (const auto& material : scenePtr->Materials)
+		for (const auto& material : scenePtr->GetMaterials())
 		{
 			json materialJson;
 			materialJson["Color"] = { material.Color.r, material.Color.g, material.Color.b };
@@ -445,7 +494,7 @@ void Application::SaveJSONScenes()
 		sceneJson["Materials"] = materialsJson;
 
 		json spheresJson = json::array();
-		for (const auto& sphere : scenePtr->Spheres)
+		for (const auto& sphere : scenePtr->GetSpheres())
 		{
 			json sphereJson;
 			glm::vec3 pos = sphere.GetPosition();
@@ -457,17 +506,16 @@ void Application::SaveJSONScenes()
 		}
 		sceneJson["Spheres"] = spheresJson;
 
-		json cameraJson;
+		for (const Camera& camera: scenePtr->GetCameras())
+		{
+			json cameraJson;
+			cameraJson["Position"] = { camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z };
+			cameraJson["Rotation"] = { camera.GetPitch(), camera.GetYaw() };
+			cameraJson["FieldOfView"] = camera.GetFieldOfView();
+			sceneJson["Cameras"].push_back(cameraJson);
+		}
 
-		const Camera& camera = m_CurrentScene->Camera;
-
-		glm::vec3 cameraPos = camera.GetPosition();
-
-		cameraJson["Position"] = { cameraPos.x, cameraPos.y, cameraPos.z };
-		cameraJson["Rotation"] = { camera.GetPitch(), camera.GetYaw() };
-		cameraJson["FieldOfView"] = camera.GetFieldOfView();
-
-		sceneJson["Camera"] = cameraJson;
+		sceneJson["ActiveCameraIndex"] = scenePtr->GetActiveCameraIndex();
 
 		std::ofstream outFile(filePath);
 		if (outFile.is_open())

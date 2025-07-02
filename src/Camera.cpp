@@ -4,6 +4,13 @@ Camera::Camera() : m_Position(0.f, 0.f, 1.f) {
     RecalculateVectors();
 }
 
+Camera::Camera(const glm::vec3& position, float pitch, float yaw, float fieldOfView):
+	m_Position(position), m_Pitch(pitch), m_Yaw(yaw), m_FieldOfView(fieldOfView)
+{
+    RecalculateVectors();
+}
+
+
 void Camera::Rotate(double xOffset, double yOffset) {
     m_Yaw += xOffset * m_Sensitivity;
     m_Pitch -= yOffset * m_Sensitivity;
