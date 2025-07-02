@@ -25,18 +25,17 @@ public:
 	void Resize(uint32_t width, uint32_t height);
 
 	void Render();
-	glm::vec4 RayGen(const glm::vec2& coord) const;
+	glm::vec4 RayGen(const glm::vec2& coord, uint32_t sampleCount, const std::shared_ptr<Scene>& scene) const;
 
 
-	HitPayload TraceRay(const Ray& ray) const;
-	HitPayload ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex) const;
-	HitPayload Miss(const Ray& ray) const;
+	static HitPayload TraceRay(const Ray& ray, const std::shared_ptr<Scene>& scene);
+	static HitPayload ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex, const std::shared_ptr<Scene>& scene);
+	static HitPayload Miss(const Ray& ray);
 
-	uint32_t* GetData() const { return m_PixelData.get(); };
+	uint32_t* GetData() const { return m_PixelData.get(); }
 	void SetScene(const std::shared_ptr<Scene>& scene) { m_CurrentScene = scene; }
-	std::shared_ptr<Scene> GetScene() const { return m_CurrentScene; }
 
-	void AsyncTileBasedRendering(std::vector<std::future<void>>& futures, uint32_t tilesX, uint32_t tilesY, uint32_t tileSize);
+	void AsyncTileBasedRendering(const std::shared_ptr<Scene>& scene);
 
 	void ResetAccumulation();
 	void SetAccumulation(bool enabled) { m_AccumulationEnabled = enabled; }
@@ -55,17 +54,16 @@ public:
 	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
 private:
 	uint32_t m_Width, m_Height;
+	float m_AspectRatio;
 	std::unique_ptr<uint32_t[]> m_PixelData;
 	std::unique_ptr<glm::vec4[]> m_AccumulationBuffer;
+
+	std::weak_ptr<Scene> m_CurrentScene;
 
 	std::atomic<uint32_t> m_SampleCount = 0;
 	uint32_t m_MaxRayBounces;
 	uint32_t m_MaxSamples;
 	bool m_AccumulationEnabled = true;
-
-	std::shared_ptr<Scene> m_CurrentScene = nullptr;
-
-	float m_AspectRatio;
 
 	uint32_t m_ThreadCount;
 };

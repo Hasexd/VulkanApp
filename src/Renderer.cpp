@@ -84,7 +84,9 @@ void Renderer::Resize(uint32_t width, uint32_t height)
 
 void Renderer::Render()
 {
-	if (m_CurrentScene == nullptr)
+	std::shared_ptr<Scene> scene;
+
+	if ((scene = m_CurrentScene.lock()) == nullptr)
 		return;
 
 	if (IsComplete())
@@ -93,7 +95,14 @@ void Renderer::Render()
 	if (m_AccumulationEnabled)
 		++m_SampleCount;
 
-	const uint32_t tileSize = 64;
+	AsyncTileBasedRendering(scene);
+	
+}
+
+
+void Renderer::AsyncTileBasedRendering(const std::shared_ptr<Scene>& scene)
+{
+	constexpr uint32_t tileSize = 64;
 	const uint32_t tilesX = (m_Width + tileSize - 1) / tileSize;
 	const uint32_t tilesY = (m_Height + tileSize - 1) / tileSize;
 	const uint32_t totalTiles = tilesX + tilesY;
@@ -101,22 +110,13 @@ void Renderer::Render()
 	std::vector<std::future<void>> futures;
 	futures.reserve(totalTiles);
 
-	AsyncTileBasedRendering(futures, tilesX, tilesY, tileSize);
+	uint32_t currentSample = m_SampleCount;
 
-	for (auto& future : futures)
-	{
-		future.wait();
-	}
-}
-
-
-void Renderer::AsyncTileBasedRendering(std::vector<std::future<void>>& futures, uint32_t tilesX, uint32_t tilesY, uint32_t tileSize)
-{
 	for (uint32_t tileY = 0; tileY < tilesY; tileY++)
 	{
 		for (uint32_t tileX = 0; tileX < tilesX; tileX++)
 		{
-			futures.emplace_back(std::async(std::launch::async, [this, tileX, tileY, tileSize]()
+			futures.emplace_back(std::async(std::launch::async, [this, scene, currentSample, tileX, tileY, tileSize]()
 				{
 					const uint32_t startX = tileX * tileSize;
 					const uint32_t startY = tileY * tileSize;
@@ -131,7 +131,7 @@ void Renderer::AsyncTileBasedRendering(std::vector<std::future<void>>& futures, 
 							coord = coord * 2.f - 1.f;
 							coord.y = -coord.y;
 
-							glm::vec4 color = RayGen(coord);
+							glm::vec4 color = RayGen(coord, currentSample, scene);
 							color = glm::clamp(color, glm::vec4(0.f), glm::vec4(1.f));
 
 							size_t idx = x + y * m_Width;
@@ -152,12 +152,18 @@ void Renderer::AsyncTileBasedRendering(std::vector<std::future<void>>& futures, 
 				}));
 		}
 	}
+
+	for (auto& future : futures)
+	{
+		future.wait();
+	}
 }
 
 
-glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
+glm::vec4 Renderer::RayGen(const glm::vec2& coord, uint32_t sampleCount, const std::shared_ptr<Scene>& scene) const
 {
-	const Camera& camera = m_CurrentScene->GetActiveCamera();
+
+	const Camera& camera = scene->GetActiveCamera();
 
 	const float scalar = glm::tan(glm::radians(camera.GetFieldOfView()) / 2);
 
@@ -180,15 +186,15 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 
 	uint32_t seed = static_cast<uint32_t>(coord.x * 1000000.0f) +
 		static_cast<uint32_t>(coord.y * 1000000.0f) * m_Width +
-		m_SampleCount * 982451653u;
+		sampleCount * 982451653u;
 
 	for (size_t i = 0; i < m_MaxRayBounces; i++)
 	{
-		const HitPayload& hit = TraceRay(ray);
+		const HitPayload& hit = TraceRay(ray, scene);
 
 		if (hit.HitDistance > 0.f)
 		{
-			const Material& material = m_CurrentScene->GetMaterials()[m_CurrentScene->GetSpheres()[hit.ObjectIndex].GetMaterialIndex()];
+			const Material& material = scene->GetMaterials()[scene->GetSpheres()[hit.ObjectIndex].GetMaterialIndex()];
 
 			light += material.EmissionColor * material.EmissionPower;
 			throughput *= material.Color;
@@ -207,16 +213,16 @@ glm::vec4 Renderer::RayGen(const glm::vec2& coord) const
 	return {light, 1.f};
 }
 
-HitPayload Renderer::TraceRay(const Ray& ray) const
+HitPayload Renderer::TraceRay(const Ray& ray, const std::shared_ptr<Scene>& scene)
 {
 	uint32_t closestSphereIndex = std::numeric_limits<uint32_t>::max();
 	float closestDistance = std::numeric_limits<float>::max();
 
 	glm::vec3 hitNear{}, hitFar{};
 
-	for (size_t i = 0; i < m_CurrentScene->GetSpheres().size(); i++)
+	for (size_t i = 0; i < scene->GetSpheres().size(); i++)
 	{
-		if (m_CurrentScene->GetSpheres()[i].Intersects(ray, hitNear, hitFar))
+		if (scene->GetSpheres()[i].Intersects(ray, hitNear, hitFar))
 		{
 			const float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
 			const float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
@@ -236,25 +242,25 @@ HitPayload Renderer::TraceRay(const Ray& ray) const
 
 	if (closestSphereIndex < std::numeric_limits<uint32_t>::max())
 	{
-		return ClosestHit(ray, closestDistance, closestSphereIndex);
+		return ClosestHit(ray, closestDistance, closestSphereIndex, scene);
 	}
 
 	return Miss(ray);
 }
 
-HitPayload Renderer::ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex) const
+HitPayload Renderer::ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex, const std::shared_ptr<Scene>& scene)
 {
 	HitPayload hit{};
 
 	hit.HitDistance = hitDistance;
 	hit.ObjectIndex = objectIndex;
 	hit.WorldPosition = ray.Origin + ray.Direction * hitDistance;
-	hit.WorldNormal = glm::normalize(hit.WorldPosition - m_CurrentScene->GetSpheres()[objectIndex].GetPosition());
+	hit.WorldNormal = glm::normalize(hit.WorldPosition - scene->GetSpheres()[objectIndex].GetPosition());
 
 	return hit;
 }
 
-HitPayload Renderer::Miss(const Ray& ray) const
+HitPayload Renderer::Miss(const Ray& ray)
 {
 	HitPayload hit{};
 	hit.HitDistance = -1.f;

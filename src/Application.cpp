@@ -98,10 +98,10 @@ void Application::Run()
 
 			ImGui::Begin("Scene Components");
 
-			for (size_t i = 0; i < m_Renderer->GetScene()->GetSpheres().size(); i++)
+			for (size_t i = 0; i < m_CurrentScene->GetSpheres().size(); i++)
 			{
-				Sphere& sphere = m_Renderer->GetScene()->GetSpheres()[i];
-				Material& material = m_Renderer->GetScene()->GetMaterials()[sphere.GetMaterialIndex()];
+				Sphere& sphere = m_CurrentScene->GetSpheres()[i];
+				Material& material = m_CurrentScene->GetMaterials()[sphere.GetMaterialIndex()];
 
 				ImGui::PushID(static_cast<int>(i));
 
