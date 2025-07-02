@@ -101,6 +101,17 @@ void Renderer::Render()
 	std::vector<std::future<void>> futures;
 	futures.reserve(totalTiles);
 
+	AsyncTileBasedRendering(futures, tilesX, tilesY, tileSize);
+
+	for (auto& future : futures)
+	{
+		future.wait();
+	}
+}
+
+
+void Renderer::AsyncTileBasedRendering(std::vector<std::future<void>>& futures, uint32_t tilesX, uint32_t tilesY, uint32_t tileSize)
+{
 	for (uint32_t tileY = 0; tileY < tilesY; tileY++)
 	{
 		for (uint32_t tileX = 0; tileX < tilesX; tileX++)
@@ -140,11 +151,6 @@ void Renderer::Render()
 					}
 				}));
 		}
-	}
-
-	for (auto& future : futures)
-	{
-		future.wait();
 	}
 }
 

@@ -36,6 +36,8 @@ public:
 	void SetScene(const std::shared_ptr<Scene>& scene) { m_CurrentScene = scene; }
 	std::shared_ptr<Scene> GetScene() const { return m_CurrentScene; }
 
+	void AsyncTileBasedRendering(std::vector<std::future<void>>& futures, uint32_t tilesX, uint32_t tilesY, uint32_t tileSize);
+
 	void ResetAccumulation();
 	void SetAccumulation(bool enabled) { m_AccumulationEnabled = enabled; }
 	bool IsAccumulationEnabled() const { return m_AccumulationEnabled; }
