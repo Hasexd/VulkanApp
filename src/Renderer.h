@@ -66,4 +66,8 @@ private:
 	bool m_AccumulationEnabled = true;
 
 	uint32_t m_ThreadCount;
+
+	uint32_t m_TilesX;
+	uint32_t m_TilesY;
+	uint32_t m_TotalTiles;
 };

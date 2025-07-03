@@ -45,26 +45,20 @@ namespace
 	}
 	constexpr glm::vec3 c_BackgroundColor = { 0.1f, 0.2f, 0.4f };
 	constexpr float c_Epsilon = 0.0001f;
+	constexpr uint32_t c_TileSize = 64;
 }
 
 
 Renderer::Renderer(uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height),
 	m_PixelData(std::make_unique<uint32_t[]>(m_Width * m_Height)),
-	m_AccumulationBuffer(std::make_unique<glm::vec4[]>(m_Width * m_Height))
+	m_AccumulationBuffer(std::make_unique<glm::vec4[]>(m_Width * m_Height)),
+	m_MaxSamples(250), m_MaxRayBounces(10), m_ThreadCount(std::thread::hardware_concurrency()),
+	m_TilesX((m_Width + c_TileSize - 1) / c_TileSize), m_TilesY((m_Height + c_TileSize - 1) / c_TileSize), m_TotalTiles(m_TilesX + m_TilesY)
 {
-	
-
-	m_Width = width;
-	m_Height = height;
-	m_AspectRatio = static_cast<float>(m_Width) / m_Height;
-	m_ThreadCount = std::thread::hardware_concurrency();
-
-	m_MaxSamples = 250;
-	m_MaxRayBounces = 10;
-
 	if (m_ThreadCount == 0)
 		m_ThreadCount = 4;
+
 }
 
 
@@ -78,6 +72,10 @@ void Renderer::Resize(uint32_t width, uint32_t height)
 	m_PixelData.reset(new uint32_t[width * height]);
 	m_AccumulationBuffer.reset(new glm::vec4[width * height]);
 	m_SampleCount = 0;
+
+	m_TilesX = (m_Width + c_TileSize - 1) / c_TileSize;
+	m_TilesY = (m_Height + c_TileSize - 1) / c_TileSize;
+	m_TotalTiles = m_TilesX + m_TilesY;
 
 }
 
@@ -102,26 +100,22 @@ void Renderer::Render()
 
 void Renderer::AsyncTileBasedRendering(const std::shared_ptr<Scene>& scene)
 {
-	constexpr uint32_t tileSize = 64;
-	const uint32_t tilesX = (m_Width + tileSize - 1) / tileSize;
-	const uint32_t tilesY = (m_Height + tileSize - 1) / tileSize;
-	const uint32_t totalTiles = tilesX + tilesY;
 
 	std::vector<std::future<void>> futures;
-	futures.reserve(totalTiles);
+	futures.reserve(m_TotalTiles);
 
 	uint32_t currentSample = m_SampleCount;
 
-	for (uint32_t tileY = 0; tileY < tilesY; tileY++)
+	for (uint32_t tileY = 0; tileY < m_TilesY; tileY++)
 	{
-		for (uint32_t tileX = 0; tileX < tilesX; tileX++)
+		for (uint32_t tileX = 0; tileX < m_TilesX; tileX++)
 		{
-			futures.emplace_back(std::async(std::launch::async, [this, scene, currentSample, tileX, tileY, tileSize]()
+			futures.emplace_back(std::async(std::launch::async, [this, scene, currentSample, tileX, tileY]()
 				{
-					const uint32_t startX = tileX * tileSize;
-					const uint32_t startY = tileY * tileSize;
-					const uint32_t endX = std::min(startX + tileSize, m_Width);
-					const uint32_t endY = std::min(startY + tileSize, m_Height);
+					const uint32_t startX = tileX * c_TileSize;
+					const uint32_t startY = tileY * c_TileSize;
+					const uint32_t endX = std::min(startX + c_TileSize, m_Width);
+					const uint32_t endY = std::min(startY + c_TileSize, m_Height);
 
 					for (uint32_t y = startY; y < endY; y++)
 					{
