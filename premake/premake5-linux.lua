@@ -9,7 +9,7 @@ vulkan = os.getenv("VULKAN_SDK")
 
 -- GLFW Vendor
 project "GLFW"
-    location "vendors/glfw"
+    location "vendor/glfw"
     kind "StaticLib"
     language "C"
     staticruntime "on"
@@ -22,7 +22,7 @@ project "GLFW"
         systemversion "latest"
 
     files {
-            "vendors/glfw/src/**.c"
+            "vendor/glfw/src/**.c"
         }
 
         defines { 
@@ -51,7 +51,7 @@ project "GLFW"
 
 -- vk-bootstrap Vendor
 project "vk-bootstrap"
-    location "vendors/vk-bootstrap"
+    location "vendor/vk-bootstrap"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
@@ -61,11 +61,11 @@ project "vk-bootstrap"
     objdir ("bin/obj/" .. outputdir .. "/%{prj.name}")
 
     files {
-        "vendors/vk-bootstrap/include/**.cpp",
-        "vendors/vk-bootstrap/include/**.h"
+        "vendor/vk-bootstrap/include/**.cpp",
+        "vendor/vk-bootstrap/include/**.h"
     }
     includedirs{
-        "vendors/vk-bootstrap/include",
+        "vendor/vk-bootstrap/include",
         vulkan .. "/include"
     }
 
@@ -78,7 +78,7 @@ project "vk-bootstrap"
         optimize "on"
 
 project "ImGui"
-    location "vendors/imgui"
+    location "vendor/imgui"
     kind "StaticLib"
     language "C++"
     staticruntime "on"
@@ -86,12 +86,12 @@ project "ImGui"
     objdir("bin/obj/" .. outputdir .. "/%{prj.name}")
 
     files {
-        "vendors/imgui/**.cpp",
-        "vendors/imgui/**.h"
+        "vendor/imgui/**.cpp",
+        "vendor/imgui/**.h"
     }
 
     includedirs{
-        "vendors/glfw/include",
+        "vendor/glfw/include",
         vulkan .. "/include"
     }
 
@@ -123,14 +123,14 @@ project "VulkanRayTracer"
     }
 
     includedirs {
-        "vendors/glfw/include",
-        "vendors/glm",
-        "vendors/vk-bootstrap/include",
-        "vendors/VulkanMemoryAllocator/include",
-        "vendors/imgui",
+        "vendor/glfw/include",
+        "vendor/glm",
+        "vendor/vk-bootstrap/include",
+        "vendor/VulkanMemoryAllocator/include",
+        "vendor/imgui",
         vulkan .. "/include",
         "src/Vulkan",
-        "vendors/json/single_include"
+        "vendor/json/single_include"
 
     }
 

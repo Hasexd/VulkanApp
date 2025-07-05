@@ -8,7 +8,7 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 -- GLFW Vendor
 project "GLFW"
-    location "vendors/glfw"
+    location "vendor/glfw"
     kind "StaticLib"
     language "C"
     staticruntime "on"
@@ -17,8 +17,8 @@ project "GLFW"
     objdir ("bin/obj/" .. outputdir .. "/%{prj.name}")
 
     files {
-        "vendors/glfw/include/GLFW/**.h",
-        "vendors/glfw/src/**.c"
+        "vendor/glfw/include/GLFW/**.h",
+        "vendor/glfw/src/**.c"
     }
 
     filter "system:windows"
@@ -40,7 +40,7 @@ project "GLFW"
 
 -- vk-bootstrap Vendor
 project "vk-bootstrap"
-    location "vendors/vk-bootstrap"
+    location "vendor/vk-bootstrap"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
@@ -50,11 +50,11 @@ project "vk-bootstrap"
     objdir ("bin/obj/" .. outputdir .. "/%{prj.name}")
 
     files {
-        "vendors/vk-bootstrap/include/**.cpp",
-        "vendors/vk-bootstrap/include/**.h"
+        "vendor/vk-bootstrap/include/**.cpp",
+        "vendor/vk-bootstrap/include/**.h"
     }
     includedirs{
-        "vendors/vk-bootstrap/include",
+        "vendor/vk-bootstrap/include",
         "$(VULKAN_SDK)/Include"
     }
 
@@ -67,7 +67,7 @@ project "vk-bootstrap"
         optimize "on"
 
 project "ImGui"
-    location "vendors/imgui"
+    location "vendor/imgui"
     kind "StaticLib"
     language "C++"
     staticruntime "on"
@@ -75,12 +75,12 @@ project "ImGui"
     objdir("bin/obj/" .. outputdir .. "/%{prj.name}")
 
     files {
-        "vendors/imgui/**.cpp",
-        "vendors/imgui/**.h"
+        "vendor/imgui/**.cpp",
+        "vendor/imgui/**.h"
     }
 
     includedirs{
-        "vendors/glfw/include",
+        "vendor/glfw/include",
         "$(VULKAN_SDK)/Include"
     }
 
@@ -112,14 +112,14 @@ project "VulkanRayTracer"
     }
 
     includedirs {
-        "vendors/glfw/include",
-        "vendors/glm",
-        "vendors/vk-bootstrap/include",
-        "vendors/VulkanMemoryAllocator/include",
-        "vendors/imgui",
+        "vendor/glfw/include",
+        "vendor/glm",
+        "vendor/vk-bootstrap/include",
+        "vendor/VulkanMemoryAllocator/include",
+        "vendor/imgui",
         "$(VULKAN_SDK)/Include",
         "src/Vulkan",
-        "vendors/json/single_include"
+        "vendor/json/single_include"
 
     }
 
