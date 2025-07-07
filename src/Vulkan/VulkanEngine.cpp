@@ -3,7 +3,6 @@
 #define VMA_IMPLEMENTATION
 #include <regex>
 #include <vk_mem_alloc.h>
-#include <iostream>
 
 
 namespace
@@ -63,6 +62,7 @@ void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(m_Device);
 	RecreateSwapchain(width, height);
+	RecreateRenderTargets(width, height);
 }
 
 void VulkanEngine::DrawFrame()
@@ -212,19 +212,16 @@ void VulkanEngine::DrawFrame()
 }
 
 
-void VulkanEngine::RecreateRenderTargets()
+void VulkanEngine::RecreateRenderTargets(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(m_Device);
 
 	if (m_RenderImage.Image != VK_NULL_HANDLE)
 		DestroyImage(m_RenderImage);
 
-	int width, height;
-	glfwGetFramebufferSize(m_Window.get(), &width, &height);
-
 	VkExtent3D imageExtent = {
-		.width = static_cast<uint32_t>(width),
-		.height = static_cast<uint32_t>(height),
+		.width = width,
+		.height = height,
 		.depth = 1
 	};
 
@@ -232,7 +229,7 @@ void VulkanEngine::RecreateRenderTargets()
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
 
 	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = m_RenderImage.Image;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = m_RenderImage.ImageFormat;

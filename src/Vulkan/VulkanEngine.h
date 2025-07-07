@@ -38,7 +38,7 @@ private:
 	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage);
 
 	void RecreateSwapchain(uint32_t width, uint32_t height);
-	void RecreateRenderTargets();
+	void RecreateRenderTargets(uint32_t width, uint32_t height);
 	void DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) const;
 	void InitVulkan();
 	void InitDevices();
