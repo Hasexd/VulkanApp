@@ -1,12 +1,12 @@
 #pragma once
 
 #include <vector>
-#include <cmath>
 #include <filesystem>
 #include <functional>
 #include <span>
 #include <array>
 #include <print>
+#include <fstream>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -20,8 +20,6 @@
 #include "VkBootstrap.h"
 #include "VulkanTypes.h"
 
-
-
 class VulkanEngine
 {
 public:
@@ -29,7 +27,7 @@ public:
 
 	void SetWindow(const std::shared_ptr<GLFWwindow>& window);
 	void Init();
-	void DrawFrame(const uint32_t* pixelData);
+	void DrawFrame();
 	void OnWindowResize(uint32_t width, uint32_t height);
 
 	void Cleanup();
@@ -37,22 +35,27 @@ public:
 	bool IsInitialized = false;
 private:
 
-	void RecreateBuffer();
-	void RecreateSwapchain(uint32_t width, uint32_t height);
+	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage);
 
-	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const;
+	void RecreateSwapchain(uint32_t width, uint32_t height);
+	void RecreateRenderTargets();
+	void DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) const;
 	void InitVulkan();
 	void InitDevices();
 	void InitSwapchain();
 	void InitCommands();
 	void InitSyncStructures();
 	void InitImgui();
+	void InitComputePipeline();
+	void InitRenderTargets();
+	void UpdateComputeDescriptorSets() const;
+	void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const;
+
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
-	void DestroyBuffer(const AllocatedBuffer& buffer) const;
+	void DestroyImage(const AllocatedImage& image) const;
 
 
-	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	FrameData& GetCurrentFrame();
 private:
 	std::shared_ptr<GLFWwindow> m_Window;
@@ -74,9 +77,18 @@ private:
 
 	VkQueue m_GraphicsQueue;
 	uint32_t m_GraphicsQueueFamily = 0;
+	VkQueue m_ComputeQueue;
+	uint32_t m_ComputeQueueFamily = 0;
 
 	VmaAllocator m_Allocator;
-	AllocatedBuffer m_Buffer;
+
+	AllocatedImage m_RenderImage;
+
+	VkPipelineLayout m_ComputePipelineLayout;
+	VkPipeline m_ComputePipeline;
+	VkDescriptorSetLayout m_ComputeDescriptorLayout;
+	VkDescriptorPool m_ComputeDescriptorPool;
+	VkDescriptorSet m_ComputeDescriptorSet;
 
 	VkFence m_ImmediateFence;
 	VkCommandBuffer m_ImmediateCommandBuffer;
@@ -87,6 +99,4 @@ private:
 	VkDescriptorPool m_ImGuiPool;
 
 	DeletionQueue m_MainDeletionQueue;
-
-
 };

@@ -102,7 +102,7 @@ void Renderer::Render()
 		AsyncTileBasedRendering(scene);
 	}
 
-	m_Engine->DrawFrame(m_PixelData.get());
+	m_Engine->DrawFrame();
 	
 }
 

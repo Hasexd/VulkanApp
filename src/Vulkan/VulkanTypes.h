@@ -46,3 +46,12 @@ struct AllocatedBuffer
 	VmaAllocation Allocation;
 	VmaAllocationInfo Info;
 };
+
+struct AllocatedImage
+{
+	VkImage Image;
+	VkImageView ImageView;
+	VmaAllocation Allocation;
+	VkExtent3D ImageExtent;
+	VkFormat ImageFormat;
+};
