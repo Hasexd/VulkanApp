@@ -41,13 +41,9 @@ namespace
 
 void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
-	if (ResizeRequested)
-	{
-		vkDeviceWaitIdle(m_Device);
-		RecreateSwapchain(width, height);
-		RecreateBuffer();
-		ResizeRequested = false;
-	}
+	vkDeviceWaitIdle(m_Device);
+	RecreateSwapchain(width, height);
+	RecreateBuffer();
 }
 
 void VulkanEngine::DrawFrame(const uint32_t* pixelData)
@@ -58,10 +54,8 @@ void VulkanEngine::DrawFrame(const uint32_t* pixelData)
 
 	uint32_t swapchainImageIndex;
 
-	if (vkAcquireNextImageKHR(m_Device, m_Swapchain, 1000000000, GetCurrentFrame().SwapchainSemaphore, nullptr, &swapchainImageIndex) == VK_ERROR_OUT_OF_DATE_KHR)
-	{
-		ResizeRequested = true;
-	}
+
+	vkAcquireNextImageKHR(m_Device, m_Swapchain, 1000000000, GetCurrentFrame().SwapchainSemaphore, nullptr, &swapchainImageIndex);
 
 	VkCommandBuffer cmd = GetCurrentFrame().MainCommandBuffer;
 	vkResetCommandBuffer(cmd, 0);
@@ -147,12 +141,7 @@ void VulkanEngine::DrawFrame(const uint32_t* pixelData)
 	presentInfo.pSwapchains = &m_Swapchain;
 	presentInfo.pImageIndices = &swapchainImageIndex;
 
-	
-	
-	if (vkQueuePresentKHR(m_GraphicsQueue, &presentInfo) == VK_ERROR_OUT_OF_DATE_KHR)
-	{
-		ResizeRequested = true;
-	}
+	vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
 
 	m_FrameNumber++;
 }
@@ -250,7 +239,7 @@ void VulkanEngine::InitImgui()
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImGui::StyleColorsDark();
 
-	ImGui_ImplGlfw_InitForVulkan(m_Window, true);
+	ImGui_ImplGlfw_InitForVulkan(m_Window.get(), true);
 
 	ImGui_ImplVulkan_InitInfo initInfo = {};
 	initInfo.Instance = m_Instance;
@@ -355,7 +344,7 @@ void VulkanEngine::InitSwapchain()
 	if (m_Window)
 	{
 		int width, height;
-		glfwGetWindowSize(m_Window, &width, &height);
+		glfwGetWindowSize(m_Window.get(), &width, &height);
 		CreateSwapchain(width, height);
 	}
 	else
@@ -380,7 +369,7 @@ void VulkanEngine::InitDevices()
 	m_Instance = vkbInstance.instance;
 	m_DebugMessenger = vkbInstance.debug_messenger;
 
-	glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface);
+	glfwCreateWindowSurface(m_Instance, m_Window.get(), nullptr, &m_Surface);
 
 	VkPhysicalDeviceVulkan13Features features{};
 
@@ -470,14 +459,6 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
 		std::println("Error when creating a buffer!");
 	}
 
-	if (!ResizeRequested)
-	{
-		m_MainDeletionQueue.PushFunction([&]() -> void
-			{
-				vmaDestroyBuffer(m_Allocator, m_Buffer.Buffer, m_Buffer.Allocation);
-			});
-	}
-	
 	return newBuffer;
 }
 
@@ -494,7 +475,7 @@ FrameData& VulkanEngine::GetCurrentFrame()
 }
 
 
-void VulkanEngine::SetWindow(GLFWwindow* window)
+void VulkanEngine::SetWindow(const std::shared_ptr<GLFWwindow>& window)
 {
 	m_Window = window;
 }
@@ -513,6 +494,8 @@ void VulkanEngine::Cleanup()
 			vkDestroySemaphore(m_Device, m_Frames[i].RenderSemaphore, nullptr);
 			vkDestroySemaphore(m_Device, m_Frames[i].SwapchainSemaphore, nullptr);
 		}
+		vmaDestroyBuffer(m_Allocator, m_Buffer.Buffer, m_Buffer.Allocation);
+
 		m_MainDeletionQueue.Flush();
 
 		DestroySwapchain();

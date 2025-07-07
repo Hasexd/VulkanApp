@@ -40,9 +40,8 @@ private:
 
 	bool m_IsRunning = true;
 
-	std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> m_Window;
+	std::shared_ptr<GLFWwindow> m_Window;
 	std::unique_ptr<Renderer> m_Renderer;
-	std::unique_ptr<VulkanEngine> m_Engine;
 
 	float m_LastFrameRenderTime;
 	double m_DeltaTime;

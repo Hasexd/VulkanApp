@@ -27,14 +27,13 @@ class VulkanEngine
 public:
 	VulkanEngine() = default;
 
-	void SetWindow(GLFWwindow* window);
+	void SetWindow(const std::shared_ptr<GLFWwindow>& window);
 	void Init();
 	void DrawFrame(const uint32_t* pixelData);
 	void OnWindowResize(uint32_t width, uint32_t height);
 
 	void Cleanup();
 public:
-	bool ResizeRequested = false;
 	bool IsInitialized = false;
 private:
 
@@ -56,6 +55,7 @@ private:
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	FrameData& GetCurrentFrame();
 private:
+	std::shared_ptr<GLFWwindow> m_Window;
 	VkInstance m_Instance;
 	VkPhysicalDevice m_PhysicalDevice;
 	VkDevice m_Device;
@@ -83,7 +83,6 @@ private:
 	VkCommandPool m_ImmediateCommandPool;
 
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
-	GLFWwindow* m_Window;
 
 	VkDescriptorPool m_ImGuiPool;
 

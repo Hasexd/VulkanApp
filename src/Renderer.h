@@ -16,12 +16,14 @@
 #include "Ray.h"
 #include "Sphere.h"
 #include "Scene.h"
+#include "VulkanEngine.h"
 
 
 class Renderer
 {
 public:
-	Renderer(uint32_t width, uint32_t height);
+	Renderer(const std::shared_ptr<GLFWwindow>& window, uint32_t width, uint32_t height);
+	~Renderer();
 	void Resize(uint32_t width, uint32_t height);
 
 	void Render();
@@ -53,6 +55,7 @@ public:
 
 	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
 private:
+	std::unique_ptr<VulkanEngine> m_Engine;
 	uint32_t m_Width, m_Height;
 	float m_AspectRatio;
 	std::unique_ptr<uint32_t[]> m_PixelData;

@@ -13,7 +13,7 @@ namespace
 
 
 Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized, const std::string& defaultScene) :
-	m_Window(nullptr, glfwDestroyWindow), m_Renderer(std::make_unique<Renderer>(width, height)), m_Engine(std::make_unique<VulkanEngine>())
+	m_Window(nullptr, glfwDestroyWindow)
 {
 	Init(width, height, title, resizable, maximized);
 	LoadJSONScenes();
@@ -42,12 +42,6 @@ void Application::Run()
 		lastFrame = currentFrame;
 
 		glfwPollEvents();
-
-		if (m_Engine->ResizeRequested)
-		{
-			m_Engine->OnWindowResize(m_Width, m_Height);
-			m_Renderer->Resize(m_Width, m_Height);
-		}
 
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
@@ -179,7 +173,6 @@ void Application::Run()
 		}
 
 		Render();
-		m_Engine->DrawFrame(m_Renderer->GetData());
 	}
 }
 
@@ -312,13 +305,11 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 	glfwWindowHint(GLFW_RESIZABLE, resizable);
 	glfwWindowHint(GLFW_MAXIMIZED, maximized);
 
-	GLFWwindow* tempWindow = glfwCreateWindow(width, height, title, nullptr, nullptr);
-	m_Window.reset(tempWindow);
+	m_Window = std::shared_ptr<GLFWwindow>(glfwCreateWindow(width, height, title, nullptr, nullptr), glfwDestroyWindow);
 	m_Width = width;
 	m_Height = height;
 
-	m_Engine->SetWindow(m_Window.get());
-	m_Engine->Init();
+	m_Renderer = std::make_unique<Renderer>(m_Window, m_Width, m_Height);
 
 	glfwSetWindowUserPointer(m_Window.get(), this);
 	glfwSetInputMode(m_Window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -326,9 +317,9 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 		{
 			if (const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window)))
 			{
-				app->m_Engine->ResizeRequested = true;
 				app->m_Width = width;
 				app->m_Height = height;
+				app->m_Renderer->Resize(width, height);
 			}
 		});
 
@@ -533,7 +524,6 @@ void Application::SaveJSONScenes()
 Application::~Application()
 {
 	SaveJSONScenes();
-	m_Engine->Cleanup();
 	glfwTerminate();
 }
 

@@ -49,7 +49,7 @@ namespace
 }
 
 
-Renderer::Renderer(uint32_t width, uint32_t height) :
+Renderer::Renderer(const std::shared_ptr<GLFWwindow>& window, uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height),
 	m_PixelData(std::make_unique<uint32_t[]>(m_Width * m_Height)),
 	m_AccumulationBuffer(std::make_unique<glm::vec4[]>(m_Width * m_Height)),
@@ -59,6 +59,17 @@ Renderer::Renderer(uint32_t width, uint32_t height) :
 	if (m_ThreadCount == 0)
 		m_ThreadCount = 4;
 
+	m_Engine = std::make_unique<VulkanEngine>();
+	m_Engine->SetWindow(window);
+	m_Engine->Init();
+}
+
+Renderer::~Renderer()
+{
+	if (m_Engine)
+	{
+		m_Engine->Cleanup();
+	}
 }
 
 
@@ -77,23 +88,21 @@ void Renderer::Resize(uint32_t width, uint32_t height)
 	m_TilesY = (m_Height + c_TileSize - 1) / c_TileSize;
 	m_TotalTiles = m_TilesX + m_TilesY;
 
+	m_Engine->OnWindowResize(width, height);
 }
 
 
 void Renderer::Render()
 {
-	std::shared_ptr<Scene> scene;
+	if (const auto& scene = m_CurrentScene.lock(); scene && !IsComplete())
+	{
+		if (m_AccumulationEnabled)
+			++m_SampleCount;
 
-	if ((scene = m_CurrentScene.lock()) == nullptr)
-		return;
+		AsyncTileBasedRendering(scene);
+	}
 
-	if (IsComplete())
-		return;
-
-	if (m_AccumulationEnabled)
-		++m_SampleCount;
-
-	AsyncTileBasedRendering(scene);
+	m_Engine->DrawFrame(m_PixelData.get());
 	
 }
 
