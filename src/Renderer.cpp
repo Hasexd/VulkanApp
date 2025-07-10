@@ -27,7 +27,7 @@ void Renderer::Resize(uint32_t width, uint32_t height)
 	m_Height = height;
 	m_AspectRatio = static_cast<float>(m_Width) / m_Height;
 
-	m_SampleCount = 0;
+	m_SampleCount = 1;
 
 	m_Engine->OnWindowResize(width, height);
 }
@@ -127,6 +127,6 @@ void Renderer::UpdateMaterialBuffer() const {
 
 void Renderer::ResetAccumulation()
 {
-	m_SampleCount = 0;
+	m_SampleCount = 1;
 	m_Engine->ResetAccumulation();
 }

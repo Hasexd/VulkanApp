@@ -33,7 +33,7 @@ public:
 	VmaAllocator GetAllocator() const { return m_Allocator; }
 	const RenderTime& GetRenderTime() const { return m_RenderTime; }
 
-	void ResetAccumulation();
+	void ResetAccumulation() const;
 
 	void Cleanup();
 public:
@@ -66,7 +66,7 @@ private:
 
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
-	void DestroyImage(const AllocatedImage& image) const;
+	void DestroyImage(AllocatedImage& image) const;
 
 
 	FrameData& GetCurrentFrame();

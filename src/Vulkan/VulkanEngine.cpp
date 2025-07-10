@@ -224,22 +224,31 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 }
 
 
-void VulkanEngine::ResetAccumulation()
+void VulkanEngine::ResetAccumulation() const
 {
-	VkCommandBuffer cmd = m_ImmediateCommandBuffer;
+	const VkCommandBuffer cmd = m_ImmediateCommandBuffer;
 	vkResetCommandBuffer(cmd, 0);
 
-	VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	constexpr VkCommandBufferBeginInfo beginInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.pNext = nullptr,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		.pInheritanceInfo = nullptr
+	};
+
 	vkBeginCommandBuffer(cmd, &beginInfo);
 
-	VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
-	VkImageSubresourceRange range{};
-	range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	range.baseMipLevel = 0;
-	range.levelCount = 1;
-	range.baseArrayLayer = 0;
-	range.layerCount = 1;
+	constexpr VkClearColorValue clearColor = { {0.0f, 0.0f, 0.0f, 0.0f } };
+
+	constexpr VkImageSubresourceRange range
+	{
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.baseMipLevel = 0,
+		.levelCount = 1,
+		.baseArrayLayer = 0,
+		.layerCount = 1
+	};
 
 	vkCmdClearColorImage(cmd, m_AccumulationImage.Image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &range);
 
@@ -259,10 +268,16 @@ void VulkanEngine::RecreateRenderTargets()
 	vkDeviceWaitIdle(m_Device);
 
 	if (m_RenderImage.Image != VK_NULL_HANDLE)
+	{
 		DestroyImage(m_RenderImage);
+		m_RenderImage = {};
+	}
 
 	if (m_AccumulationImage.Image != VK_NULL_HANDLE)
+	{
 		DestroyImage(m_AccumulationImage);
+		m_AccumulationImage = {};
+	}
 
 	InitRenderTargets();
 
@@ -683,11 +698,6 @@ void VulkanEngine::InitRenderTargets()
 	MaterialBuffer = CreateBuffer(maxMaterials * sizeof(MaterialBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	UpdateComputeDescriptorSets();
-
-	m_MainDeletionQueue.PushFunction([*this] {
-		DestroyImage(m_RenderImage);
-		DestroyImage(m_AccumulationImage);
-	});
 }
 
 
@@ -934,14 +944,27 @@ void VulkanEngine::SetWindow(const std::shared_ptr<GLFWwindow>& window)
 	m_Window = window;
 }
 
-void VulkanEngine::DestroyImage(const AllocatedImage& image) const
+void VulkanEngine::DestroyImage(AllocatedImage& image) const
 {
-	if (image.ImageView != VK_NULL_HANDLE) {
+	if (image.ImageView != VK_NULL_HANDLE)
+	{
 		vkDestroyImageView(m_Device, image.ImageView, nullptr);
+		image.ImageView = VK_NULL_HANDLE;
 	}
-	if (image.Image != VK_NULL_HANDLE) {
+
+	if (image.Image != VK_NULL_HANDLE)
+	{
+		vkDestroyImage(m_Device, image.Image, nullptr);
+		image.Image = VK_NULL_HANDLE;
+	}
+
+	if (image.Allocation != nullptr)
+	{
 		vmaDestroyImage(m_Allocator, image.Image, image.Allocation);
+		image.Allocation = nullptr;
 	}
+
+	image.ImageFormat = VK_FORMAT_UNDEFINED;
 }
 
 
@@ -952,24 +975,31 @@ void VulkanEngine::Cleanup()
 		vkDeviceWaitIdle(m_Device);
 		vkDestroyQueryPool(m_Device, m_TimestampQueryPool, nullptr);
 
-		for (uint32_t i = 0; i < m_FrameOverlap; i++)
+		for (const auto& frame : m_Frames)
 		{
-			vkDestroyCommandPool(m_Device, m_Frames[i].CommandPool, nullptr);
-			vkDestroyFence(m_Device, m_Frames[i].RenderFence, nullptr);
-			vkDestroySemaphore(m_Device, m_Frames[i].RenderSemaphore, nullptr);
-			vkDestroySemaphore(m_Device, m_Frames[i].SwapchainSemaphore, nullptr);
+			vkDestroyCommandPool(m_Device, frame.CommandPool, nullptr);
+			vkDestroyFence(m_Device, frame.RenderFence, nullptr);
+			vkDestroySemaphore(m_Device, frame.RenderSemaphore, nullptr);
+			vkDestroySemaphore(m_Device, frame.SwapchainSemaphore, nullptr);
 		}
 
 		vmaDestroyBuffer(m_Allocator, UniformBuffer.Buffer, UniformBuffer.Allocation);
 		vmaDestroyBuffer(m_Allocator, SphereBuffer.Buffer, SphereBuffer.Allocation);
 		vmaDestroyBuffer(m_Allocator, MaterialBuffer.Buffer, MaterialBuffer.Allocation);
 
+		DestroyImage(m_RenderImage);
+		DestroyImage(m_AccumulationImage);
+
 		m_MainDeletionQueue.Flush();
 
 		DestroySwapchain();
+
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
 		vkDestroyDescriptorPool(m_Device, m_ImGuiPool, nullptr);
+
+		vmaDestroyAllocator(m_Allocator);
 		vkDestroyDevice(m_Device, nullptr);
+
 		vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger, nullptr);
 		vkDestroyInstance(m_Instance, nullptr);
 		IsInitialized = false;
