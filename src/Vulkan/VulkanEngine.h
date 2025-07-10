@@ -27,18 +27,26 @@ public:
 
 	void SetWindow(const std::shared_ptr<GLFWwindow>& window);
 	void Init();
-	void DrawFrame();
+	void DrawFrame(bool dispatchCompute = false);
 	void OnWindowResize(uint32_t width, uint32_t height);
+
+	VmaAllocator GetAllocator() const { return m_Allocator; }
+
+	void ResetAccumulation();
 
 	void Cleanup();
 public:
 	bool IsInitialized = false;
+	AllocatedBuffer UniformBuffer;
+	AllocatedBuffer SphereBuffer;
+	AllocatedBuffer MaterialBuffer;
 private:
 
-	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage);
+	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage) const;
+	AllocatedBuffer CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;
 
 	void RecreateSwapchain(uint32_t width, uint32_t height);
-	void RecreateRenderTargets(uint32_t width, uint32_t height);
+	void RecreateRenderTargets();
 	void DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) const;
 	void InitVulkan();
 	void InitDevices();
@@ -77,12 +85,14 @@ private:
 
 	VkQueue m_GraphicsQueue;
 	uint32_t m_GraphicsQueueFamily = 0;
-	VkQueue m_ComputeQueue;
-	uint32_t m_ComputeQueueFamily = 0;
 
 	VmaAllocator m_Allocator;
 
 	AllocatedImage m_RenderImage;
+
+	
+	AllocatedImage m_AccumulationImage;
+	uint32_t m_CurrentSampleCount = 0;
 
 	VkPipelineLayout m_ComputePipelineLayout;
 	VkPipeline m_ComputePipeline;

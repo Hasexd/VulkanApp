@@ -62,10 +62,10 @@ void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(m_Device);
 	RecreateSwapchain(width, height);
-	RecreateRenderTargets(width, height);
+	RecreateRenderTargets();
 }
 
-void VulkanEngine::DrawFrame()
+void VulkanEngine::DrawFrame(bool dispatchCompute)
 {
 	FrameData& frame = GetCurrentFrame();
 	vkWaitForFences(m_Device, 1, &frame.RenderFence, VK_TRUE, UINT64_MAX);
@@ -88,17 +88,20 @@ void VulkanEngine::DrawFrame()
 	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(cmd, &bi);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_ComputePipeline);
-	vkCmdBindDescriptorSets(
-		cmd,
-		VK_PIPELINE_BIND_POINT_COMPUTE,
-		m_ComputePipelineLayout,
-		0, 1, &m_ComputeDescriptorSet,
-		0, nullptr
-	);
-	uint32_t gx = (m_RenderImage.ImageExtent.width + 7) / 8;
-	uint32_t gy = (m_RenderImage.ImageExtent.height + 7) / 8;
-	vkCmdDispatch(cmd, gx, gy, 1);
+	if (dispatchCompute) 
+	{
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_ComputePipeline);
+		vkCmdBindDescriptorSets(
+			cmd,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			m_ComputePipelineLayout,
+			0, 1, &m_ComputeDescriptorSet,
+			0, nullptr
+		);
+		uint32_t gx = (m_RenderImage.ImageExtent.width + 15) / 16;
+		uint32_t gy = (m_RenderImage.ImageExtent.height + 15) / 16;
+		vkCmdDispatch(cmd, gx, gy, 1);
+	}
 
 	VkImageMemoryBarrier toSrcBarrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 	toSrcBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -212,60 +215,113 @@ void VulkanEngine::DrawFrame()
 }
 
 
-void VulkanEngine::RecreateRenderTargets(uint32_t width, uint32_t height)
+void VulkanEngine::ResetAccumulation()
+{
+	VkCommandBuffer cmd = m_ImmediateCommandBuffer;
+	vkResetCommandBuffer(cmd, 0);
+
+	VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	vkBeginCommandBuffer(cmd, &beginInfo);
+
+	VkClearColorValue clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
+	VkImageSubresourceRange range{};
+	range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	range.baseMipLevel = 0;
+	range.levelCount = 1;
+	range.baseArrayLayer = 0;
+	range.layerCount = 1;
+
+	vkCmdClearColorImage(cmd, m_AccumulationImage.Image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &range);
+
+	vkEndCommandBuffer(cmd);
+
+	vkResetFences(m_Device, 1, &m_ImmediateFence);
+	VkSubmitInfo submitInfo{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmd;
+	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
+	vkWaitForFences(m_Device, 1, &m_ImmediateFence, VK_TRUE, UINT64_MAX);
+}
+
+
+void VulkanEngine::RecreateRenderTargets()
 {
 	vkDeviceWaitIdle(m_Device);
 
 	if (m_RenderImage.Image != VK_NULL_HANDLE)
 		DestroyImage(m_RenderImage);
 
-	VkExtent3D imageExtent = {
-		.width = width,
-		.height = height,
-		.depth = 1
-	};
+	if (m_AccumulationImage.Image != VK_NULL_HANDLE)
+		DestroyImage(m_AccumulationImage);
 
-	m_RenderImage = CreateImage(imageExtent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
-		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+	InitRenderTargets();
 
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = m_RenderImage.Image;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = m_RenderImage.ImageFormat;
-	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = 1;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 1;
-
-	if (vkCreateImageView(m_Device, &viewInfo, nullptr, &m_RenderImage.ImageView))
-	{
-		std::println("Failed to create image view for render target");
-		return;
-	}
-
-	TransitionImageLayout(m_RenderImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	UpdateComputeDescriptorSets();
 }
 
 void VulkanEngine::UpdateComputeDescriptorSets() const
 {
-	VkDescriptorImageInfo imageInfo = {};
-	imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	imageInfo.imageView = m_RenderImage.ImageView;
-	imageInfo.sampler = VK_NULL_HANDLE;
+	std::array<VkWriteDescriptorSet, 5> descriptorWrites = {};
+	VkDescriptorImageInfo outputImageInfo = {};
+	outputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	outputImageInfo.imageView = m_RenderImage.ImageView;
 
-	VkWriteDescriptorSet descriptorWrite = {};
-	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite.dstSet = m_ComputeDescriptorSet;
-	descriptorWrite.dstBinding = 0;
-	descriptorWrite.dstArrayElement = 0;
-	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	descriptorWrite.descriptorCount = 1;
-	descriptorWrite.pImageInfo = &imageInfo;
+	descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[0].dstSet = m_ComputeDescriptorSet;
+	descriptorWrites[0].dstBinding = 0;
+	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	descriptorWrites[0].descriptorCount = 1;
+	descriptorWrites[0].pImageInfo = &outputImageInfo;
 
-	vkUpdateDescriptorSets(m_Device, 1, &descriptorWrite, 0, nullptr);
+	VkDescriptorImageInfo accumImageInfo = {};
+	accumImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	accumImageInfo.imageView = m_AccumulationImage.ImageView;
+
+	descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[1].dstSet = m_ComputeDescriptorSet;
+	descriptorWrites[1].dstBinding = 1;
+	descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	descriptorWrites[1].descriptorCount = 1;
+	descriptorWrites[1].pImageInfo = &accumImageInfo;
+
+	VkDescriptorBufferInfo uniformBufferInfo = {};
+	uniformBufferInfo.buffer = UniformBuffer.Buffer;
+	uniformBufferInfo.offset = 0;
+	uniformBufferInfo.range = sizeof(UniformBufferData);
+
+	descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[2].dstSet = m_ComputeDescriptorSet;
+	descriptorWrites[2].dstBinding = 2;
+	descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrites[2].descriptorCount = 1;
+	descriptorWrites[2].pBufferInfo = &uniformBufferInfo;
+
+	VkDescriptorBufferInfo sphereBufferInfo = {};
+	sphereBufferInfo.buffer = SphereBuffer.Buffer;
+	sphereBufferInfo.offset = 0;
+	sphereBufferInfo.range = VK_WHOLE_SIZE;
+
+	descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[3].dstSet = m_ComputeDescriptorSet;
+	descriptorWrites[3].dstBinding = 3;
+	descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	descriptorWrites[3].descriptorCount = 1;
+	descriptorWrites[3].pBufferInfo = &sphereBufferInfo;
+
+	VkDescriptorBufferInfo materialBufferInfo = {};
+	materialBufferInfo.buffer = MaterialBuffer.Buffer;
+	materialBufferInfo.offset = 0;
+	materialBufferInfo.range = VK_WHOLE_SIZE;
+
+	descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[4].dstSet = m_ComputeDescriptorSet;
+	descriptorWrites[4].dstBinding = 4;
+	descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	descriptorWrites[4].descriptorCount = 1;
+	descriptorWrites[4].pBufferInfo = &materialBufferInfo;
+
+	vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(descriptorWrites.size()),
+		descriptorWrites.data(), 0, nullptr);
 }
 
 
@@ -390,16 +446,38 @@ void VulkanEngine::InitImgui()
 
 void VulkanEngine::InitComputePipeline()
 {
-	VkDescriptorSetLayoutBinding imageBinding{};
-	imageBinding.binding = 0;
-	imageBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	imageBinding.descriptorCount = 1;
-	imageBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	std::array<VkDescriptorSetLayoutBinding, 5> bindings = {};
+
+	bindings[0].binding = 0;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	bindings[0].descriptorCount = 1;
+	bindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	bindings[1].descriptorCount = 1;
+	bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	bindings[2].binding = 2;
+	bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[2].descriptorCount = 1;
+	bindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	bindings[3].binding = 3;
+	bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[3].descriptorCount = 1;
+	bindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	bindings[4].binding = 4;
+	bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[4].descriptorCount = 1;
+	bindings[4].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &imageBinding;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
 
 	if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_ComputeDescriptorLayout))
 	{
@@ -407,16 +485,22 @@ void VulkanEngine::InitComputePipeline()
 		return;
 	}
 
-	VkDescriptorPoolSize poolSize = {};
-	poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	poolSize.descriptorCount = 10;
+
+
+	std::array<VkDescriptorPoolSize, 3 > poolSizes{};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	poolSizes[0].descriptorCount = 2;
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[1].descriptorCount = 1;
+	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	poolSizes[2].descriptorCount = 2;
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	poolInfo.maxSets = 10;
-	poolInfo.poolSizeCount = 1;
-	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.maxSets = 1;
+	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.pPoolSizes = poolSizes.data();
 
 	if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_ComputeDescriptorPool))
 	{
@@ -446,7 +530,7 @@ void VulkanEngine::InitComputePipeline()
 		std::println("Failed to create compute pipeline layout");
 		return;
 	}
-	const std::vector<uint32_t> buffer = LoadShaderFromFile("../shaders/computeShader.spv");
+	const std::vector<uint32_t> buffer = LoadShaderFromFile("../shaders/ray_tracing.spv");
 
 	VkShaderModuleCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -503,6 +587,7 @@ void VulkanEngine::InitRenderTargets()
 	m_RenderImage = CreateImage(imageExtent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
 
+
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = m_RenderImage.Image;
@@ -522,11 +607,45 @@ void VulkanEngine::InitRenderTargets()
 
 	TransitionImageLayout(m_RenderImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
+	const VkExtent3D accumExtent = {
+		.width = static_cast<uint32_t>(width),
+		.height = static_cast<uint32_t>(height),
+		.depth = 1
+	};
+
+	m_AccumulationImage = CreateImage(accumExtent, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT |
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+
+	VkImageViewCreateInfo accumViewInfo{};
+	accumViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	accumViewInfo.image = m_AccumulationImage.Image;
+	accumViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	accumViewInfo.format = m_AccumulationImage.ImageFormat;
+	accumViewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0,1, 0,1 };
+
+	if (vkCreateImageView(m_Device, &accumViewInfo, nullptr, &m_AccumulationImage.ImageView))
+	{
+		std::println("Failed to create image view for accumulation target");
+		return;
+	}
+
+	TransitionImageLayout(m_AccumulationImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+
+	UniformBuffer = CreateBuffer(sizeof(UniformBufferData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	constexpr size_t maxSpheres = 100;
+	SphereBuffer = CreateBuffer(maxSpheres * sizeof(SphereBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	constexpr size_t maxMaterials = 50;
+	MaterialBuffer = CreateBuffer(maxMaterials * sizeof(MaterialBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
 	UpdateComputeDescriptorSets();
 
-	m_MainDeletionQueue.PushFunction([=]() {
+	m_MainDeletionQueue.PushFunction([*this] {
 		DestroyImage(m_RenderImage);
-		});
+		DestroyImage(m_AccumulationImage);
+	});
 }
 
 
@@ -672,7 +791,7 @@ void VulkanEngine::InitDevices()
 		});
 }
 
-AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage)
+AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage) const
 {
 	AllocatedImage newImage = {};
 	newImage.ImageFormat = format;
@@ -703,6 +822,28 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 	}
 
 	return newImage;
+}
+
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const {
+	AllocatedBuffer buffer;
+
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	VmaAllocationCreateInfo allocInfo = {};
+	allocInfo.usage = memoryUsage;
+
+	if (vmaCreateBuffer(m_Allocator, &bufferInfo, &allocInfo,
+		&buffer.Buffer, &buffer.Allocation, nullptr) != VK_SUCCESS) {
+		std::println("Failed to create buffer");
+		return {};
+	}
+
+	vmaGetAllocationInfo(m_Allocator, buffer.Allocation, &buffer.Info);
+	return buffer;
 }
 
 
@@ -764,6 +905,10 @@ void VulkanEngine::Cleanup()
 			vkDestroySemaphore(m_Device, m_Frames[i].RenderSemaphore, nullptr);
 			vkDestroySemaphore(m_Device, m_Frames[i].SwapchainSemaphore, nullptr);
 		}
+
+		vmaDestroyBuffer(m_Allocator, UniformBuffer.Buffer, UniformBuffer.Allocation);
+		vmaDestroyBuffer(m_Allocator, SphereBuffer.Buffer, SphereBuffer.Allocation);
+		vmaDestroyBuffer(m_Allocator, MaterialBuffer.Buffer, MaterialBuffer.Allocation);
 
 		m_MainDeletionQueue.Flush();
 

@@ -119,7 +119,11 @@ project "VulkanRayTracer"
         "src/**.h",
         "src/**.cpp",
         "src/Vulkan/**.cpp",
-        "src/Vulkan/**.h"
+        "src/Vulkan/**.h",
+        "shaders/**.comp",
+        "shaders/**.vert",
+        "shaders/**.frag",
+        "scenes/**.json"
     }
 
     includedirs {

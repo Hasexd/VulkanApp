@@ -108,7 +108,11 @@ project "VulkanRayTracer"
         "src/**.h",
         "src/**.cpp",
         "src/Vulkan/**.cpp",
-        "src/Vulkan/**.h"
+        "src/Vulkan/**.h",
+        "shaders/**.comp",
+        "shaders/**.vert",
+        "shaders/**.frag",
+        "scenes/**.json"
     }
 
     includedirs {
@@ -130,10 +134,12 @@ project "VulkanRayTracer"
     }
 
      vpaths {
-    { ["_Vulkan"]       = { "src/Vulkan/**" } },
-    { ["Header Files"] = { "src/**.h" } },
-    { ["Source Files"] = { "src/**.cpp" } },
-}
+     {["_Vulkan"]  = { "src/Vulkan/**" }},
+     {["_Shaders"] = { "shaders/**.comp", "shaders/**.vert", "shaders/**.frag" }},
+     {["_Scenes"] = { "scenes/**.json" }},
+     {["Header Files"] = { "src/**.h" }} ,
+     {["Source Files"] = { "src/**.cpp" }},
+    }
 
     filter "system:windows"
         systemversion "latest"
