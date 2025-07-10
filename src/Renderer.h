@@ -44,6 +44,7 @@ public:
 	uint32_t GetMaxSamples() const { return m_MaxSamples; }
 	uint32_t& GetMaxSamples() { return m_MaxSamples; }
 
+	const RenderTime& GetRenderTime() const { return m_Engine->GetRenderTime(); }
 
 	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
 private:

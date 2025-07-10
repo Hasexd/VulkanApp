@@ -25,7 +25,6 @@ public:
 
 	void Run();
 private:
-	void Render();
 	void Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized);
 
 	void HandleCameraRotate(Camera& camera);
@@ -43,7 +42,6 @@ private:
 	std::shared_ptr<GLFWwindow> m_Window;
 	std::unique_ptr<Renderer> m_Renderer;
 
-	float m_LastFrameRenderTime;
 	double m_DeltaTime;
 
 	double m_LastMouseX = 0.f;

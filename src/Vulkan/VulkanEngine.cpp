@@ -69,6 +69,10 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 {
 	FrameData& frame = GetCurrentFrame();
 	vkWaitForFences(m_Device, 1, &frame.RenderFence, VK_TRUE, UINT64_MAX);
+
+	if (m_FrameNumber > 0)
+		UpdateTimings();
+
 	frame.DataDeletionQueue.Flush();
 	vkResetFences(m_Device, 1, &frame.RenderFence);
 
@@ -87,9 +91,13 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 	VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(cmd, &bi);
+	vkCmdResetQueryPool(cmd, m_TimestampQueryPool, 0, 4);
+	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_TimestampQueryPool, 2);
 
 	if (dispatchCompute) 
 	{
+		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 0);
+
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_ComputePipeline);
 		vkCmdBindDescriptorSets(
 			cmd,
@@ -101,6 +109,7 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 		uint32_t gx = (m_RenderImage.ImageExtent.width + 15) / 16;
 		uint32_t gy = (m_RenderImage.ImageExtent.height + 15) / 16;
 		vkCmdDispatch(cmd, gx, gy, 1);
+		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 1);
 	}
 
 	VkImageMemoryBarrier toSrcBarrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
@@ -177,7 +186,7 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	);
-
+	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_TimestampQueryPool, 3);
 	vkEndCommandBuffer(cmd);
 
 	VkSemaphoreSubmitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
@@ -258,6 +267,38 @@ void VulkanEngine::RecreateRenderTargets()
 	InitRenderTargets();
 
 }
+
+void VulkanEngine::UpdateTimings()
+{
+	uint64_t timestamps[4];
+	VkResult result = vkGetQueryPoolResults(m_Device, m_TimestampQueryPool, 0, 4,
+		sizeof(timestamps), timestamps, sizeof(uint64_t),
+		VK_QUERY_RESULT_64_BIT);
+
+	if (result == VK_SUCCESS)
+	{
+		VkPhysicalDeviceProperties props;
+		vkGetPhysicalDeviceProperties(m_PhysicalDevice, &props);
+
+		if (timestamps[1] > timestamps[0]) 
+		{ 
+			uint64_t rayTracingElapsed = timestamps[1] - timestamps[0];
+			float rayTracingMs = rayTracingElapsed * props.limits.timestampPeriod / 1000000.0f;
+
+			m_RenderTime.RayTracingTime = rayTracingMs;
+		}
+		else
+		{
+			m_RenderTime.RayTracingTime = 0.0f;
+		}
+
+		uint64_t fullFrameElapsed = timestamps[3] - timestamps[2];
+		float fullFrameMs = fullFrameElapsed * props.limits.timestampPeriod / 1000000.0f;
+
+		m_RenderTime.FullScreenTime = fullFrameMs;
+	}
+}
+
 
 void VulkanEngine::UpdateComputeDescriptorSets() const
 {
@@ -378,6 +419,7 @@ void VulkanEngine::InitVulkan()
 	InitSyncStructures();
 	InitComputePipeline();
 	InitRenderTargets();
+	CreateTimestampQueryPool();
 }
 
 void VulkanEngine::InitImgui()
@@ -870,6 +912,17 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	m_SwapchainImageViews = vkbSwapchain.get_image_views().value();
 }
 
+void VulkanEngine::CreateTimestampQueryPool()
+{
+	VkQueryPoolCreateInfo queryPoolInfo{};
+	queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+	queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+	queryPoolInfo.queryCount = 4;
+
+	vkCreateQueryPool(m_Device, &queryPoolInfo, nullptr, &m_TimestampQueryPool);
+}
+
+
 FrameData& VulkanEngine::GetCurrentFrame()
 {
 	return m_Frames[m_FrameNumber % m_FrameOverlap];
@@ -897,6 +950,7 @@ void VulkanEngine::Cleanup()
 	if (IsInitialized)
 	{
 		vkDeviceWaitIdle(m_Device);
+		vkDestroyQueryPool(m_Device, m_TimestampQueryPool, nullptr);
 
 		for (uint32_t i = 0; i < m_FrameOverlap; i++)
 		{

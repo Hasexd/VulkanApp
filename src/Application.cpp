@@ -127,7 +127,8 @@ void Application::Run()
 
 
 			ImGui::Begin("Information");
-			ImGui::Text("Rendering took: %.3fms", m_LastFrameRenderTime);
+			ImGui::Text("Rendering the image took: %.3fms", m_Renderer->GetRenderTime().RayTracingTime);
+			ImGui::Text("Rendering the screen took: %.3fms", m_Renderer->GetRenderTime().FullScreenTime);
 
 			ImGui::Separator();
 			ImGui::Text("Accumulation Settings");
@@ -172,18 +173,8 @@ void Application::Run()
 			m_Renderer->ResetAccumulation();
 		}
 
-		Render();
+		m_Renderer->Render();
 	}
-}
-
-void Application::Render()
-{
-	auto startTime = std::chrono::high_resolution_clock::now();
-	m_Renderer->Render();
-	auto endTime = std::chrono::high_resolution_clock::now();
-
-	std::chrono::duration<float, std::milli> duration = endTime - startTime;
-	m_LastFrameRenderTime = duration.count();
 }
 
 void Application::HandleKeyboardInput(Camera& camera)

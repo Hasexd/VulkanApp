@@ -31,6 +31,7 @@ public:
 	void OnWindowResize(uint32_t width, uint32_t height);
 
 	VmaAllocator GetAllocator() const { return m_Allocator; }
+	const RenderTime& GetRenderTime() const { return m_RenderTime; }
 
 	void ResetAccumulation();
 
@@ -40,6 +41,7 @@ public:
 	AllocatedBuffer UniformBuffer;
 	AllocatedBuffer SphereBuffer;
 	AllocatedBuffer MaterialBuffer;
+
 private:
 
 	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage) const;
@@ -58,6 +60,9 @@ private:
 	void InitRenderTargets();
 	void UpdateComputeDescriptorSets() const;
 	void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const;
+
+	void CreateTimestampQueryPool();
+	void UpdateTimings();
 
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
@@ -107,6 +112,9 @@ private:
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 
 	VkDescriptorPool m_ImGuiPool;
+
+	RenderTime m_RenderTime;
+	VkQueryPool m_TimestampQueryPool;
 
 	DeletionQueue m_MainDeletionQueue;
 };

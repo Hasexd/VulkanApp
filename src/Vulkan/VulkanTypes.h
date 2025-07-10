@@ -87,3 +87,9 @@ struct MaterialBufferData
 	float EmissionPower;
 	alignas(16) glm::vec3 EmissionColor;
 };
+
+struct RenderTime
+{
+	float RayTracingTime = 0.0f;
+	float FullScreenTime = 0.0f;
+};

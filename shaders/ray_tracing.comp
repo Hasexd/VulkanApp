@@ -204,7 +204,7 @@ vec4 RayGen(vec2 coord, uint sampleCount)
         {
             const Material material = Materials[Spheres[hit.ObjectIndex].MaterialIndex];
 
-            light += material.EmissionColor * material.EmissionPower;
+            light += material.EmissionColor * material.EmissionPower * throughput;
             
             throughput *= material.Color;
 
