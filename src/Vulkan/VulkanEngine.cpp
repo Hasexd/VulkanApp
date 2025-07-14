@@ -142,15 +142,15 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 	blit.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
 	blit.srcOffsets[0] = { 0, 0, 0 };
 	blit.srcOffsets[1] = {
-		int32_t(m_RenderImage.ImageExtent.width),
-		int32_t(m_RenderImage.ImageExtent.height),
+		static_cast<int32_t>(m_RenderImage.ImageExtent.width),
+		static_cast<int32_t>(m_RenderImage.ImageExtent.height),
 		1
 	};
 	blit.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
 	blit.dstOffsets[0] = { 0, 0, 0 };
 	blit.dstOffsets[1] = {
-		int32_t(m_SwapchainExtent.width),
-		int32_t(m_SwapchainExtent.height),
+		static_cast<int32_t>(m_SwapchainExtent.width),
+		static_cast<int32_t>(m_SwapchainExtent.height),
 		1
 	};
 
@@ -380,8 +380,6 @@ void VulkanEngine::UpdateComputeDescriptorSets() const
 		descriptorWrites.data(), 0, nullptr);
 }
 
-
-
 void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) const
 {
 	VkRenderingAttachmentInfo colorAttachmentInfo{};
@@ -455,7 +453,7 @@ void VulkanEngine::InitImgui()
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 	poolInfo.maxSets = 1000;
-	poolInfo.poolSizeCount = (uint32_t)std::size(poolSizes);
+	poolInfo.poolSizeCount = static_cast<uint32_t>(std::size(poolSizes));
 	poolInfo.pPoolSizes = poolSizes;
 
 	vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_ImGuiPool);
@@ -542,8 +540,6 @@ void VulkanEngine::InitComputePipeline()
 		return;
 	}
 
-
-
 	std::array<VkDescriptorPoolSize, 3 > poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	poolSizes[0].descriptorCount = 2;
@@ -587,7 +583,7 @@ void VulkanEngine::InitComputePipeline()
 		std::println("Failed to create compute pipeline layout");
 		return;
 	}
-	const std::vector<uint32_t> buffer = LoadShaderFromFile("../shaders/ray_tracing.spv");
+	const std::vector<uint32_t> buffer = LoadShaderFromFile("../shaders/compiled/ray_tracing.spv");
 
 	VkShaderModuleCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -635,7 +631,7 @@ void VulkanEngine::InitRenderTargets()
 	int width, height;
 	glfwGetFramebufferSize(m_Window.get(), &width, &height);
 
-	VkExtent3D imageExtent = {
+	const VkExtent3D imageExtent = {
 		.width = static_cast<uint32_t>(width),
 		.height = static_cast<uint32_t>(height),
 		.depth = 1
@@ -997,7 +993,6 @@ void VulkanEngine::Cleanup()
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
 		vkDestroyDescriptorPool(m_Device, m_ImGuiPool, nullptr);
 
-		vmaDestroyAllocator(m_Allocator);
 		vkDestroyDevice(m_Device, nullptr);
 
 		vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger, nullptr);

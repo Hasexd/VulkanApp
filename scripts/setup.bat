@@ -12,7 +12,7 @@ if not exist %PREMAKE% (
     exit /b 1
 )
 
-copy /y premake\premake5-windows.lua premake5.lua
+copy /y premake\premake5.lua premake5.lua
 
 REM Run Premake to generate project files
 echo Running Premake to generate project files...

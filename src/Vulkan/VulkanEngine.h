@@ -94,10 +94,7 @@ private:
 	VmaAllocator m_Allocator;
 
 	AllocatedImage m_RenderImage;
-
-	
 	AllocatedImage m_AccumulationImage;
-	uint32_t m_CurrentSampleCount = 0;
 
 	VkPipelineLayout m_ComputePipelineLayout;
 	VkPipeline m_ComputePipeline;

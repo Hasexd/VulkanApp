@@ -6,7 +6,6 @@ workspace "VulkanRayTracer"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
--- GLFW Vendor
 project "GLFW"
     location "vendor/glfw"
     kind "StaticLib"
@@ -38,7 +37,6 @@ project "GLFW"
         optimize "on"
 
 
--- vk-bootstrap Vendor
 project "vk-bootstrap"
     location "vendor/vk-bootstrap"
     kind "StaticLib"
@@ -93,7 +91,6 @@ project "ImGui"
         optimize "on"
 
 
--- Main Project
 project "VulkanRayTracer"
     location "src"
     kind "ConsoleApp"
@@ -141,14 +138,32 @@ project "VulkanRayTracer"
      {["Source Files"] = { "src/**.cpp" }},
     }
 
-    filter "system:windows"
+    
+    filter "files:shaders/*.comp"
+        buildmessage 'Compiling shader: %{file.basename}'
+        buildcommands {
+            'glslang -V "%{file.abspath}" -o "%{wks.location}/shaders/compiled/%{file.basename}.spv"'
+        }
+        buildoutputs {
+            "%{wks.location}/shaders/compiled/%{file.basename}.spv"
+        }
+    filter {}
+
+    filter { "system:windows" }
         systemversion "latest"
         links { "$(VULKAN_SDK)/Lib/vulkan-1" }
+    filter {}
 
+    filter {"system:linux"}
+        links { "vulkan" }
+    filter {}
+       
     filter "configurations:Debug"
         runtime "Debug"
         symbols "on"
+    filter {}
 
     filter "configurations:Release"
         runtime "Release"
         optimize "on"
+    filter {}

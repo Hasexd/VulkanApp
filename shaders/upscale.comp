@@ -1,0 +1,60 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba16f) readonly uniform image2D InputImage;
+layout(binding = 1, rgba16f) readonly uniform image2D BloomChainImage;
+layout(binding = 2, rgba16f) writeonly uniform image2D OutputImage;
+
+layout(std140, binding = 3) uniform UpscaleParams
+{
+    int InputMipLevel;
+    int OutputMipLevel;
+    vec2 InputSize;
+    vec2 OutputSize;
+    float FilterRadius;
+    bool IsFirstPass;
+} upscaleParams;
+
+vec3 upsampleTent(vec2 uv, vec2 texelSize)
+{
+    vec4 d = texelSize.xyxy * vec4(1.0, 1.0, -1.0, 0.0) * upscaleParams.FilterRadius;
+
+    vec3 s = imageLoad(InputImage, ivec2((uv - d.xy) / texelSize)).rgb;
+    s += imageLoad(InputImage, ivec2((uv - d.wy) / texelSize)).rgb * 2.0;
+    s += imageLoad(InputImage, ivec2((uv - d.zy) / texelSize)).rgb;
+    s += imageLoad(InputImage, ivec2((uv + d.zw) / texelSize)).rgb * 2.0;
+    s += imageLoad(InputImage, ivec2((uv) / texelSize)).rgb * 4.0;
+    s += imageLoad(InputImage, ivec2((uv + d.xw) / texelSize)).rgb * 2.0;
+    s += imageLoad(InputImage, ivec2((uv + d.zy) / texelSize)).rgb;
+    s += imageLoad(InputImage, ivec2((uv + d.wy) / texelSize)).rgb * 2.0;
+    s += imageLoad(InputImage, ivec2((uv + d.xy) / texelSize)).rgb;
+
+    return s / 16.0;
+}
+
+void main()
+{
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    vec2 outputSize = upscaleParams.OutputSize;
+    
+    if(pixelCoord.x >= outputSize.x || pixelCoord.y >= outputSize.y)
+        return;
+
+    vec2 uv = (vec2(pixelCoord) + 0.5) / outputSize;
+    vec2 inputTexelSize = 1.0 / upscaleParams.InputSize;
+    
+    vec2 inputCoord = uv * upscaleParams.InputSize;
+    
+    vec3 upsampledColor = upsampleTent(inputCoord, inputTexelSize);
+    
+    vec3 finalColor = upsampledColor;
+    
+    if(!upscaleParams.IsFirstPass)
+    {
+        vec3 bloomChainColor = imageLoad(BloomChainImage, pixelCoord).rgb;
+        finalColor += bloomChainColor;
+    }
+    
+    imageStore(OutputImage, pixelCoord, vec4(finalColor, 1.0));
+}

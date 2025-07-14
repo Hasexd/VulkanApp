@@ -1,0 +1,46 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) readonly uniform image2D OriginalImage;
+layout(binding = 1, rgba16f) readonly uniform image2D BloomImage;
+layout(binding = 2, rgba8) writeonly uniform image2D OutputImage;
+
+layout(std140, binding = 3) uniform CompositeParams
+{
+    float BloomStrength;
+    float Exposure;
+    float Gamma;
+} compositeParams;
+
+vec3 ACESFilm(vec3 x)
+{
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+void main()
+{
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    vec2 imageSize = vec2(imageSize(OriginalImage));
+    
+    if(pixelCoord.x >= imageSize.x || pixelCoord.y >= imageSize.y)
+        return;
+
+    vec3 originalColor = imageLoad(OriginalImage, pixelCoord).rgb;
+    vec3 bloomColor = imageLoad(BloomImage, pixelCoord).rgb;
+    
+    vec3 finalColor = originalColor + bloomColor * compositeParams.BloomStrength;
+    
+    finalColor *= compositeParams.Exposure;
+    
+    finalColor = ACESFilm(finalColor);
+    
+    finalColor = pow(finalColor, vec3(1.0 / compositeParams.Gamma));
+    
+    imageStore(OutputImage, pixelCoord, vec4(finalColor, 1.0));
+}
