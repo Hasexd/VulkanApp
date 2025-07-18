@@ -12,7 +12,6 @@
 #include <thread>
 
 #include "Camera.h"
-#include "Random.h"
 #include "Ray.h"
 #include "Sphere.h"
 #include "Scene.h"
