@@ -1,6 +1,5 @@
 #include "Application.h"
 
-#include "imgui_internal.h"
 
 
 namespace
@@ -33,6 +32,7 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 
 void Application::Run()
 {
+	ImTextureID renderTexture = m_Renderer->GetRenderTextureID();
 	double lastFrame = glfwGetTime();
 
 	while (m_IsRunning)
@@ -50,7 +50,6 @@ void Application::Run()
 		HandleCursorInput();
 		
 		
-		bool sceneChanged = false;
 		if (!m_Scenes.empty())
 		{
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
@@ -85,7 +84,7 @@ void Application::Run()
 			ImGui::PopStyleVar(2);
 		}
 
-		
+		bool sceneChanged = false;
 		if (m_CurrentScene)
 		{
 
@@ -93,6 +92,21 @@ void Application::Run()
 
 			HandleCameraRotate(camera);
 			HandleKeyboardInput(camera);
+
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+			ImGui::Begin("Viewport", nullptr,
+				ImGuiWindowFlags_NoScrollbar |
+				ImGuiWindowFlags_NoScrollWithMouse);
+
+			m_ViewportHovered = ImGui::IsWindowHovered();
+
+			ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+			ImGui::Image(renderTexture, viewportSize);
+
+			ImGui::End();
+			ImGui::PopStyleVar(2);
 
 			ImGui::Begin("Scene Components");
 
@@ -236,7 +250,8 @@ void Application::HandleCameraRotate(Camera& camera)
 	double xpos, ypos;
 	glfwGetCursorPos(m_Window.get(), &xpos, &ypos);
 
-	if (m_FirstMouse) {
+	if (m_FirstMouse) 
+	{
 		m_LastMouseX = xpos;
 		m_LastMouseY = ypos;
 		m_FirstMouse = false;
@@ -245,8 +260,8 @@ void Application::HandleCameraRotate(Camera& camera)
 
 	if (m_LastMouseX != xpos && m_LastMouseY != ypos)
 	{
-		double xOffset = m_LastMouseX - xpos;
-		double yOffset = m_LastMouseY - ypos;
+		const double xOffset = m_LastMouseX - xpos;
+		const double yOffset = m_LastMouseY - ypos;
 		m_LastMouseX = xpos;
 		m_LastMouseY = ypos;
 
@@ -255,8 +270,6 @@ void Application::HandleCameraRotate(Camera& camera)
 		if (m_Renderer->IsAccumulationEnabled())
 			m_Renderer->ResetAccumulation();
 	}
-
-	
 }
 
 void Application::HandleCursorInput()
@@ -272,16 +285,24 @@ void Application::HandleCursorInput()
 		m_EscapePressed = false;
 	}
 
-	if (glfwGetMouseButton(m_Window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !m_LeftClickPressed && !ImGui::GetIO().WantCaptureMouse)
+	static bool viewportHovered = false;
+
+	if (glfwGetMouseButton(m_Window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !m_LeftClickPressed)
 	{
-		m_CursorVisible = false;
-		glfwSetInputMode(m_Window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		if (viewportHovered)
+		{
+			m_CursorVisible = false;
+			glfwSetInputMode(m_Window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			m_FirstMouse = true;
+		}
 		m_LeftClickPressed = true;
 	}
 	else if (glfwGetMouseButton(m_Window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE)
 	{
 		m_LeftClickPressed = false;
 	}
+
+	viewportHovered = m_ViewportHovered;
 }
 
 void Application::Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized)

@@ -45,6 +45,7 @@ public:
 	uint32_t& GetMaxSamples() { return m_MaxSamples; }
 
 	const RenderTime& GetRenderTime() const { return m_Engine->GetRenderTime(); }
+	ImTextureID GetRenderTextureID() const { return m_Engine->GetRenderTextureID(); }
 
 	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
 private:

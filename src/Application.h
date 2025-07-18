@@ -31,6 +31,10 @@ private:
 	void HandleKeyboardInput(Camera& camera);
 	void HandleCursorInput();
 
+	void OnCameraMovementStart();
+	void OnCameraMovementEnd();
+	void UpdateCameraMovementState();
+
 	void LoadJSONScenes();
 	void SaveJSONScenes();
 
@@ -52,6 +56,7 @@ private:
 	bool m_LeftClickPressed = false;
 	bool m_QPressed = false;
 	bool m_EPressed = false;
+	bool m_ViewportHovered = false;
 
 	std::unordered_map<std::string, std::shared_ptr<Scene>> m_Scenes;
 	std::unordered_map<std::string, std::string> m_SceneFilePaths;

@@ -94,8 +94,18 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 	vkCmdResetQueryPool(cmd, m_TimestampQueryPool, 0, 4);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_TimestampQueryPool, 2);
 
-	if (dispatchCompute) 
+	if (dispatchCompute)
 	{
+
+		if (m_FrameNumber > 0) {
+			TransitionImage(
+				cmd,
+				m_RenderImage.Image,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_GENERAL
+			);
+		}
+
 		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 0);
 
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_ComputePipeline);
@@ -110,72 +120,20 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 		uint32_t gy = (m_RenderImage.ImageExtent.height + 15) / 16;
 		vkCmdDispatch(cmd, gx, gy, 1);
 		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 1);
+
+		TransitionImage(
+			cmd,
+			m_RenderImage.Image,
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		);
 	}
-
-	VkImageMemoryBarrier toSrcBarrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-	toSrcBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-	toSrcBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	toSrcBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-	toSrcBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-	toSrcBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	toSrcBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	toSrcBarrier.image = m_RenderImage.Image;
-	toSrcBarrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0,1,0,1 };
-
-	vkCmdPipelineBarrier(
-		cmd,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		0, 0, nullptr,
-		0, nullptr,
-		1, &toSrcBarrier
-	);
 
 	TransitionImage(
 		cmd,
 		m_SwapchainImages[swapchainImageIndex],
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-	);
-
-	VkImageBlit blit{};
-	blit.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-	blit.srcOffsets[0] = { 0, 0, 0 };
-	blit.srcOffsets[1] = {
-		static_cast<int32_t>(m_RenderImage.ImageExtent.width),
-		static_cast<int32_t>(m_RenderImage.ImageExtent.height),
-		1
-	};
-	blit.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-	blit.dstOffsets[0] = { 0, 0, 0 };
-	blit.dstOffsets[1] = {
-		static_cast<int32_t>(m_SwapchainExtent.width),
-		static_cast<int32_t>(m_SwapchainExtent.height),
-		1
-	};
-
-	vkCmdBlitImage(
-		cmd,
-		m_RenderImage.Image,
-		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		m_SwapchainImages[swapchainImageIndex],
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		1, &blit,
-		VK_FILTER_LINEAR
-	);
-
-	TransitionImage(
-		cmd,
-		m_SwapchainImages[swapchainImageIndex],
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	);
-
-	TransitionImage(
-		cmd,
-		m_RenderImage.Image,
-		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		VK_IMAGE_LAYOUT_GENERAL
 	);
 
 	DrawImGui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
@@ -186,17 +144,18 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	);
+
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_TimestampQueryPool, 3);
 	vkEndCommandBuffer(cmd);
 
 	VkSemaphoreSubmitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
 	waitInfo.semaphore = frame.SwapchainSemaphore;
-	waitInfo.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
+	waitInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 	waitInfo.value = 0;
 
 	VkSemaphoreSubmitInfo signalInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
 	signalInfo.semaphore = frame.RenderSemaphore;
-	signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
+	signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
 	signalInfo.value = 0;
 
 	VkCommandBufferSubmitInfo cmdInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
@@ -411,7 +370,6 @@ void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) c
 void VulkanEngine::Init()
 {
 	InitVulkan();
-	InitImgui();
 
 	uint32_t size = m_SwapchainExtent.width * m_SwapchainExtent.height * 4;
 
@@ -431,11 +389,12 @@ void VulkanEngine::InitVulkan()
 	InitCommands();
 	InitSyncStructures();
 	InitComputePipeline();
+	InitImGui();
 	InitRenderTargets();
 	CreateTimestampQueryPool();
 }
 
-void VulkanEngine::InitImgui()
+void VulkanEngine::InitImGui()
 {
 	VkDescriptorPoolSize poolSizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
 		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
@@ -466,6 +425,7 @@ void VulkanEngine::InitImgui()
 	ImGui::StyleColorsDark();
 
 	ImGui_ImplGlfw_InitForVulkan(m_Window.get(), true);
+
 
 	ImGui_ImplVulkan_InitInfo initInfo = {};
 	initInfo.Instance = m_Instance;
@@ -694,6 +654,23 @@ void VulkanEngine::InitRenderTargets()
 	MaterialBuffer = CreateBuffer(maxMaterials * sizeof(MaterialBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	UpdateComputeDescriptorSets();
+
+
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+	vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_RenderSampler);
+
+	m_RenderTextureID = reinterpret_cast<ImTextureID>(ImGui_ImplVulkan_AddTexture(
+		m_RenderSampler,
+		m_RenderImage.ImageView,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	));
 }
 
 
@@ -969,6 +946,8 @@ void VulkanEngine::Cleanup()
 	if (IsInitialized)
 	{
 		vkDeviceWaitIdle(m_Device);
+
+		vkDestroySampler(m_Device, m_RenderSampler, nullptr);
 		vkDestroyQueryPool(m_Device, m_TimestampQueryPool, nullptr);
 
 		for (const auto& frame : m_Frames)

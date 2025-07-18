@@ -30,6 +30,8 @@ public:
 	void DrawFrame(bool dispatchCompute = false);
 	void OnWindowResize(uint32_t width, uint32_t height);
 
+	ImTextureID GetRenderTextureID() const { return m_RenderTextureID; }
+
 	VmaAllocator GetAllocator() const { return m_Allocator; }
 	const RenderTime& GetRenderTime() const { return m_RenderTime; }
 
@@ -55,7 +57,7 @@ private:
 	void InitSwapchain();
 	void InitCommands();
 	void InitSyncStructures();
-	void InitImgui();
+	void InitImGui();
 	void InitComputePipeline();
 	void InitRenderTargets();
 	void UpdateComputeDescriptorSets() const;
@@ -109,6 +111,8 @@ private:
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 
 	VkDescriptorPool m_ImGuiPool;
+	ImTextureID m_RenderTextureID;
+	VkSampler m_RenderSampler;
 
 	RenderTime m_RenderTime;
 	VkQueryPool m_TimestampQueryPool;
