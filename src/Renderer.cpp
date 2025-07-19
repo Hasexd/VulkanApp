@@ -7,8 +7,7 @@ Renderer::Renderer(const std::shared_ptr<GLFWwindow>& window, uint32_t width, ui
 {
 
 	m_Engine = std::make_unique<VulkanEngine>();
-	m_Engine->SetWindow(window);
-	m_Engine->Init();
+	m_Engine->Init(window);
 }
 
 Renderer::~Renderer()

@@ -25,8 +25,7 @@ class VulkanEngine
 public:
 	VulkanEngine() = default;
 
-	void SetWindow(const std::shared_ptr<GLFWwindow>& window);
-	void Init();
+	void Init(const std::shared_ptr<GLFWwindow>& window);
 	void DrawFrame(bool dispatchCompute = false);
 	void OnWindowResize(uint32_t width, uint32_t height);
 
@@ -52,19 +51,24 @@ private:
 	void RecreateSwapchain(uint32_t width, uint32_t height);
 	void RecreateRenderTargets();
 	void DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) const;
-	void InitVulkan();
 	void InitDevices();
 	void InitSwapchain();
 	void InitCommands();
 	void InitSyncStructures();
 	void InitImGui();
-	void InitComputePipeline();
+	void InitShaders();
+
 	void InitRenderTargets();
-	void UpdateComputeDescriptorSets() const;
+	void InitBuffers();
+	void UpdateDescriptorSets(const Shader& shader) const;
 	void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const;
 
 	void CreateTimestampQueryPool();
 	void UpdateTimings();
+
+	void CreateShader(const ShaderName& shaderName,
+		const std::vector<DescriptorBinding>& bindings,
+		const std::filesystem::path& path);
 
 	void CreateSwapchain(uint32_t width, uint32_t height);
 	void DestroySwapchain();
@@ -98,15 +102,11 @@ private:
 	AllocatedImage m_RenderImage;
 	AllocatedImage m_AccumulationImage;
 
-	VkPipelineLayout m_ComputePipelineLayout;
-	VkPipeline m_ComputePipeline;
-	VkDescriptorSetLayout m_ComputeDescriptorLayout;
-	VkDescriptorPool m_ComputeDescriptorPool;
-	VkDescriptorSet m_ComputeDescriptorSet;
-
 	VkFence m_ImmediateFence;
 	VkCommandBuffer m_ImmediateCommandBuffer;
 	VkCommandPool m_ImmediateCommandPool;
+
+	std::unordered_map<ShaderName, Shader> m_Shaders;
 
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 

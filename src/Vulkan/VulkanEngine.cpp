@@ -58,6 +58,23 @@ namespace
 	}
 }
 
+void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
+{
+	m_Window = window;
+
+	InitDevices();
+	InitSwapchain();
+	InitCommands();
+	InitSyncStructures();
+	InitImGui();
+	InitBuffers();
+	InitRenderTargets();
+	InitShaders();
+	CreateTimestampQueryPool();
+
+	IsInitialized = true;
+}
+
 void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(m_Device);
@@ -106,14 +123,14 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 			);
 		}
 
+		const Shader& shader = m_Shaders.at(ShaderName::RAY_TRACING);
 		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 0);
-
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_ComputePipeline);
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, shader.Pipeline);
 		vkCmdBindDescriptorSets(
 			cmd,
 			VK_PIPELINE_BIND_POINT_COMPUTE,
-			m_ComputePipelineLayout,
-			0, 1, &m_ComputeDescriptorSet,
+			shader.PipelineLayout,
+			0, 1, &shader.DescriptorSet,
 			0, nullptr
 		);
 		uint32_t gx = (m_RenderImage.ImageExtent.width + 15) / 16;
@@ -182,46 +199,6 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 	m_FrameNumber++;
 }
 
-
-void VulkanEngine::ResetAccumulation() const
-{
-	const VkCommandBuffer cmd = m_ImmediateCommandBuffer;
-	vkResetCommandBuffer(cmd, 0);
-
-	constexpr VkCommandBufferBeginInfo beginInfo
-	{
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		.pNext = nullptr,
-		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-		.pInheritanceInfo = nullptr
-	};
-
-	vkBeginCommandBuffer(cmd, &beginInfo);
-
-	constexpr VkClearColorValue clearColor = { {0.0f, 0.0f, 0.0f, 0.0f } };
-
-	constexpr VkImageSubresourceRange range
-	{
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.baseMipLevel = 0,
-		.levelCount = 1,
-		.baseArrayLayer = 0,
-		.layerCount = 1
-	};
-
-	vkCmdClearColorImage(cmd, m_AccumulationImage.Image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &range);
-
-	vkEndCommandBuffer(cmd);
-
-	vkResetFences(m_Device, 1, &m_ImmediateFence);
-	VkSubmitInfo submitInfo{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &cmd;
-	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
-	vkWaitForFences(m_Device, 1, &m_ImmediateFence, VK_TRUE, UINT64_MAX);
-}
-
-
 void VulkanEngine::RecreateRenderTargets()
 {
 	vkDeviceWaitIdle(m_Device);
@@ -229,17 +206,24 @@ void VulkanEngine::RecreateRenderTargets()
 	if (m_RenderImage.Image != VK_NULL_HANDLE)
 	{
 		DestroyImage(m_RenderImage);
-		m_RenderImage = {};
 	}
 
 	if (m_AccumulationImage.Image != VK_NULL_HANDLE)
 	{
 		DestroyImage(m_AccumulationImage);
-		m_AccumulationImage = {};
 	}
 
 	InitRenderTargets();
 
+	if (m_Shaders.contains(ShaderName::RAY_TRACING))
+	{
+		Shader& shader = m_Shaders[ShaderName::RAY_TRACING];
+
+		shader.Bindings[0] = DescriptorBinding(m_RenderImage);
+		shader.Bindings[1] = DescriptorBinding(m_AccumulationImage);
+
+		UpdateDescriptorSets(shader);
+	}
 }
 
 void VulkanEngine::UpdateTimings()
@@ -273,72 +257,6 @@ void VulkanEngine::UpdateTimings()
 	}
 }
 
-
-void VulkanEngine::UpdateComputeDescriptorSets() const
-{
-	std::array<VkWriteDescriptorSet, 5> descriptorWrites = {};
-	VkDescriptorImageInfo outputImageInfo = {};
-	outputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	outputImageInfo.imageView = m_RenderImage.ImageView;
-
-	descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[0].dstSet = m_ComputeDescriptorSet;
-	descriptorWrites[0].dstBinding = 0;
-	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	descriptorWrites[0].descriptorCount = 1;
-	descriptorWrites[0].pImageInfo = &outputImageInfo;
-
-	VkDescriptorImageInfo accumImageInfo = {};
-	accumImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	accumImageInfo.imageView = m_AccumulationImage.ImageView;
-
-	descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[1].dstSet = m_ComputeDescriptorSet;
-	descriptorWrites[1].dstBinding = 1;
-	descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	descriptorWrites[1].descriptorCount = 1;
-	descriptorWrites[1].pImageInfo = &accumImageInfo;
-
-	VkDescriptorBufferInfo uniformBufferInfo = {};
-	uniformBufferInfo.buffer = UniformBuffer.Buffer;
-	uniformBufferInfo.offset = 0;
-	uniformBufferInfo.range = sizeof(UniformBufferData);
-
-	descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[2].dstSet = m_ComputeDescriptorSet;
-	descriptorWrites[2].dstBinding = 2;
-	descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descriptorWrites[2].descriptorCount = 1;
-	descriptorWrites[2].pBufferInfo = &uniformBufferInfo;
-
-	VkDescriptorBufferInfo sphereBufferInfo = {};
-	sphereBufferInfo.buffer = SphereBuffer.Buffer;
-	sphereBufferInfo.offset = 0;
-	sphereBufferInfo.range = VK_WHOLE_SIZE;
-
-	descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[3].dstSet = m_ComputeDescriptorSet;
-	descriptorWrites[3].dstBinding = 3;
-	descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	descriptorWrites[3].descriptorCount = 1;
-	descriptorWrites[3].pBufferInfo = &sphereBufferInfo;
-
-	VkDescriptorBufferInfo materialBufferInfo = {};
-	materialBufferInfo.buffer = MaterialBuffer.Buffer;
-	materialBufferInfo.offset = 0;
-	materialBufferInfo.range = VK_WHOLE_SIZE;
-
-	descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[4].dstSet = m_ComputeDescriptorSet;
-	descriptorWrites[4].dstBinding = 4;
-	descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	descriptorWrites[4].descriptorCount = 1;
-	descriptorWrites[4].pBufferInfo = &materialBufferInfo;
-
-	vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(descriptorWrites.size()),
-		descriptorWrites.data(), 0, nullptr);
-}
-
 void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) const
 {
 	VkRenderingAttachmentInfo colorAttachmentInfo{};
@@ -366,32 +284,10 @@ void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) c
 	
 }
 
-
-void VulkanEngine::Init()
-{
-	InitVulkan();
-
-	uint32_t size = m_SwapchainExtent.width * m_SwapchainExtent.height * 4;
-
-	IsInitialized = true;
-}
-
 void VulkanEngine::RecreateSwapchain(uint32_t width, uint32_t height)
 {
 	DestroySwapchain();
 	CreateSwapchain(width, height);
-}
-
-void VulkanEngine::InitVulkan()
-{
-	InitDevices();
-	InitSwapchain();
-	InitCommands();
-	InitSyncStructures();
-	InitComputePipeline();
-	InitImGui();
-	InitRenderTargets();
-	CreateTimestampQueryPool();
 }
 
 void VulkanEngine::InitImGui()
@@ -417,7 +313,6 @@ void VulkanEngine::InitImGui()
 
 	vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_ImGuiPool);
 
-
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -425,7 +320,6 @@ void VulkanEngine::InitImGui()
 	ImGui::StyleColorsDark();
 
 	ImGui_ImplGlfw_InitForVulkan(m_Window.get(), true);
-
 
 	ImGui_ImplVulkan_InitInfo initInfo = {};
 	initInfo.Instance = m_Instance;
@@ -459,54 +353,64 @@ void VulkanEngine::InitImGui()
 		});
 }
 
-void VulkanEngine::InitComputePipeline()
+void VulkanEngine::InitShaders()
 {
-	std::array<VkDescriptorSetLayoutBinding, 5> bindings = {};
+	std::unordered_map<VkDescriptorType, uint32_t> descriptorTypes = {
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 }
+	};
 
-	bindings[0].binding = 0;
-	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	bindings[0].descriptorCount = 1;
-	bindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	std::vector rtBindings =
+	{
+		DescriptorBinding(m_RenderImage),
+		DescriptorBinding(m_AccumulationImage),
+		DescriptorBinding(UniformBuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER),
+		DescriptorBinding(SphereBuffer),
+		DescriptorBinding(MaterialBuffer)
+	};
 
-	bindings[1].binding = 1;
-	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	bindings[1].descriptorCount = 1;
-	bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	CreateShader(ShaderName::RAY_TRACING, rtBindings, "../shaders/compiled/ray_tracing.spv");
+	UpdateDescriptorSets(m_Shaders[ShaderName::RAY_TRACING]);
+}
 
-	bindings[2].binding = 2;
-	bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	bindings[2].descriptorCount = 1;
-	bindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+void VulkanEngine::CreateShader(const ShaderName& shaderName,
+	const std::vector<DescriptorBinding>& bindings,
+	const std::filesystem::path& path)
+{
+	Shader shader;
+	shader.Bindings = bindings;
 
-	bindings[3].binding = 3;
-	bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	bindings[3].descriptorCount = 1;
-	bindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	std::vector<VkDescriptorSetLayoutBinding> layoutBindings;
+	std::unordered_map<VkDescriptorType, uint32_t> descriptorCounts;
 
-	bindings[4].binding = 4;
-	bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	bindings[4].descriptorCount = 1;
-	bindings[4].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	for (size_t i = 0; i < bindings.size(); ++i)
+	{
+		layoutBindings.emplace_back(
+			static_cast<uint32_t>(i),        
+			bindings[i].Type,                
+			1,                               
+			VK_SHADER_STAGE_COMPUTE_BIT      
+		);
+		descriptorCounts[bindings[i].Type]++;
+	}
 
-
+	std::vector<VkDescriptorPoolSize> poolSizes;
+	for (const auto& [type, count] : descriptorCounts)
+	{
+		poolSizes.emplace_back(type, count);
+	}
+	
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
+	layoutInfo.pBindings = layoutBindings.data();
 
-	if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_ComputeDescriptorLayout))
+	if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &shader.DescriptorLayout))
 	{
 		std::println("Failed to create compute descriptor set layout");
 		return;
 	}
-
-	std::array<VkDescriptorPoolSize, 3 > poolSizes{};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	poolSizes[0].descriptorCount = 2;
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[1].descriptorCount = 1;
-	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	poolSizes[2].descriptorCount = 2;
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -515,7 +419,7 @@ void VulkanEngine::InitComputePipeline()
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
 
-	if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_ComputeDescriptorPool))
+	if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &shader.DescriptorPool))
 	{
 		std::println("Failed to create compute descriptor pool");
 		return;
@@ -523,11 +427,11 @@ void VulkanEngine::InitComputePipeline()
 
 	VkDescriptorSetAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = m_ComputeDescriptorPool;
+	allocInfo.descriptorPool = shader.DescriptorPool;
 	allocInfo.descriptorSetCount = 1;
-	allocInfo.pSetLayouts = &m_ComputeDescriptorLayout;
+	allocInfo.pSetLayouts = &shader.DescriptorLayout;
 
-	if (vkAllocateDescriptorSets(m_Device, &allocInfo, &m_ComputeDescriptorSet))
+	if (vkAllocateDescriptorSets(m_Device, &allocInfo, &shader.DescriptorSet))
 	{
 		std::println("Failed to allocate compute descriptor set");
 		return;
@@ -536,14 +440,15 @@ void VulkanEngine::InitComputePipeline()
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &m_ComputeDescriptorLayout;
+	pipelineLayoutInfo.pSetLayouts = &shader.DescriptorLayout;
 
-	if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_ComputePipelineLayout))
+	if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &shader.PipelineLayout))
 	{
 		std::println("Failed to create compute pipeline layout");
 		return;
 	}
-	const std::vector<uint32_t> buffer = LoadShaderFromFile("../shaders/compiled/ray_tracing.spv");
+
+	const std::vector<uint32_t> buffer = LoadShaderFromFile(path);
 
 	VkShaderModuleCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -566,9 +471,9 @@ void VulkanEngine::InitComputePipeline()
 	VkComputePipelineCreateInfo pipelineInfo = {};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 	pipelineInfo.stage = shaderStageInfo;
-	pipelineInfo.layout = m_ComputePipelineLayout;
+	pipelineInfo.layout = shader.PipelineLayout;
 
-	if (vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_ComputePipeline))
+	if (vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &shader.Pipeline))
 	{
 		std::println("Failed to create compute pipeline");
 		vkDestroyShaderModule(m_Device, computeShaderModule, nullptr);
@@ -577,14 +482,55 @@ void VulkanEngine::InitComputePipeline()
 
 	vkDestroyShaderModule(m_Device, computeShaderModule, nullptr);
 
-	m_MainDeletionQueue.PushFunction([*this] {
-		vkDestroyPipeline(m_Device, m_ComputePipeline, nullptr);
-		vkDestroyPipelineLayout(m_Device, m_ComputePipelineLayout, nullptr);
-		vkDestroyDescriptorPool(m_Device, m_ComputeDescriptorPool, nullptr);
-		vkDestroyDescriptorSetLayout(m_Device, m_ComputeDescriptorLayout, nullptr);
+	m_Shaders[shaderName] = shader;
+
+	m_MainDeletionQueue.PushFunction([this, shader]() -> void
+	{
+		shader.Destroy(m_Device);
 	});
 }
 
+void VulkanEngine::UpdateDescriptorSets(const Shader& shader) const
+{
+	std::vector<VkWriteDescriptorSet> descriptorWrites;
+	descriptorWrites.reserve(shader.Bindings.size());
+
+	for (size_t i = 0; i < shader.Bindings.size(); ++i)
+	{
+		VkWriteDescriptorSet writeDescriptorSet = {};
+		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeDescriptorSet.dstSet = shader.DescriptorSet;
+		writeDescriptorSet.dstBinding = static_cast<uint32_t>(i);
+		writeDescriptorSet.descriptorType = shader.Bindings[i].Type;
+		writeDescriptorSet.descriptorCount = 1;
+
+		if (shader.Bindings[i].Type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
+			shader.Bindings[i].Type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+		{
+			writeDescriptorSet.pImageInfo = &shader.Bindings[i].ImageInfo;
+		}
+		else
+		{
+			writeDescriptorSet.pBufferInfo = &shader.Bindings[i].BufferInfo;
+		}
+
+		descriptorWrites.push_back(writeDescriptorSet);
+	}
+
+	vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(descriptorWrites.size()),
+		descriptorWrites.data(), 0, nullptr);
+}
+
+void VulkanEngine::InitBuffers()
+{
+	UniformBuffer = CreateBuffer(sizeof(UniformBufferData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	constexpr size_t maxSpheres = 100;
+	SphereBuffer = CreateBuffer(maxSpheres * sizeof(SphereBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	constexpr size_t maxMaterials = 50;
+	MaterialBuffer = CreateBuffer(maxMaterials * sizeof(MaterialBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+}
 
 void VulkanEngine::InitRenderTargets()
 {
@@ -596,27 +542,8 @@ void VulkanEngine::InitRenderTargets()
 		.height = static_cast<uint32_t>(height),
 		.depth = 1
 	};
-
 	m_RenderImage = CreateImage(imageExtent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
-
-
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = m_RenderImage.Image;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = m_RenderImage.ImageFormat;
-	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = 1;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 1;
-
-	if (vkCreateImageView(m_Device, &viewInfo, nullptr, &m_RenderImage.ImageView))
-	{
-		std::println("Failed to create image view for render target");
-		return;
-	}
 
 	TransitionImageLayout(m_RenderImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
@@ -629,42 +556,20 @@ void VulkanEngine::InitRenderTargets()
 	m_AccumulationImage = CreateImage(accumExtent, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
-	VkImageViewCreateInfo accumViewInfo{};
-	accumViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	accumViewInfo.image = m_AccumulationImage.Image;
-	accumViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	accumViewInfo.format = m_AccumulationImage.ImageFormat;
-	accumViewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0,1, 0,1 };
-
-	if (vkCreateImageView(m_Device, &accumViewInfo, nullptr, &m_AccumulationImage.ImageView))
-	{
-		std::println("Failed to create image view for accumulation target");
-		return;
-	}
-
 	TransitionImageLayout(m_AccumulationImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
+	if (m_RenderSampler == VK_NULL_HANDLE) {
+		VkSamplerCreateInfo samplerInfo{};
 
-	UniformBuffer = CreateBuffer(sizeof(UniformBufferData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-	constexpr size_t maxSpheres = 100;
-	SphereBuffer = CreateBuffer(maxSpheres * sizeof(SphereBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	constexpr size_t maxMaterials = 50;
-	MaterialBuffer = CreateBuffer(maxMaterials * sizeof(MaterialBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	UpdateComputeDescriptorSets();
-
-
-	VkSamplerCreateInfo samplerInfo{};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-	vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_RenderSampler);
+		vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_RenderSampler);
+	}
 
 	m_RenderTextureID = reinterpret_cast<ImTextureID>(ImGui_ImplVulkan_AddTexture(
 		m_RenderSampler,
@@ -846,6 +751,23 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 		return {};
 	}
 
+	VkImageViewCreateInfo viewInfo{};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = newImage.Image;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = newImage.ImageFormat;
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+
+	if (vkCreateImageView(m_Device, &viewInfo, nullptr, &newImage.ImageView))
+	{
+		std::println("Failed to create image view for render target");
+		return {};
+	}
+
 	return newImage;
 }
 
@@ -905,39 +827,63 @@ void VulkanEngine::CreateTimestampQueryPool()
 	vkCreateQueryPool(m_Device, &queryPoolInfo, nullptr, &m_TimestampQueryPool);
 }
 
-
 FrameData& VulkanEngine::GetCurrentFrame()
 {
 	return m_Frames[m_FrameNumber % m_FrameOverlap];
 }
 
-
-void VulkanEngine::SetWindow(const std::shared_ptr<GLFWwindow>& window)
-{
-	m_Window = window;
-}
-
 void VulkanEngine::DestroyImage(AllocatedImage& image) const
 {
-	if (image.ImageView != VK_NULL_HANDLE)
-	{
+	if (image.ImageView != VK_NULL_HANDLE) {
 		vkDestroyImageView(m_Device, image.ImageView, nullptr);
 		image.ImageView = VK_NULL_HANDLE;
 	}
 
-	if (image.Image != VK_NULL_HANDLE)
-	{
-		vkDestroyImage(m_Device, image.Image, nullptr);
-		image.Image = VK_NULL_HANDLE;
-	}
-
-	if (image.Allocation != nullptr)
-	{
+	if (image.Image != VK_NULL_HANDLE) {
 		vmaDestroyImage(m_Allocator, image.Image, image.Allocation);
+		image.Image = VK_NULL_HANDLE;
 		image.Allocation = nullptr;
 	}
 
 	image.ImageFormat = VK_FORMAT_UNDEFINED;
+}
+
+void VulkanEngine::ResetAccumulation() const
+{
+	const VkCommandBuffer cmd = m_ImmediateCommandBuffer;
+	vkResetCommandBuffer(cmd, 0);
+
+	constexpr VkCommandBufferBeginInfo beginInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.pNext = nullptr,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		.pInheritanceInfo = nullptr
+	};
+
+	vkBeginCommandBuffer(cmd, &beginInfo);
+
+	constexpr VkClearColorValue clearColor = { {0.0f, 0.0f, 0.0f, 0.0f } };
+
+	constexpr VkImageSubresourceRange range
+	{
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.baseMipLevel = 0,
+		.levelCount = 1,
+		.baseArrayLayer = 0,
+		.layerCount = 1
+	};
+
+	vkCmdClearColorImage(cmd, m_AccumulationImage.Image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &range);
+
+	vkEndCommandBuffer(cmd);
+
+	vkResetFences(m_Device, 1, &m_ImmediateFence);
+	VkSubmitInfo submitInfo{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmd;
+	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
+	vkWaitForFences(m_Device, 1, &m_ImmediateFence, VK_TRUE, UINT64_MAX);
 }
 
 
