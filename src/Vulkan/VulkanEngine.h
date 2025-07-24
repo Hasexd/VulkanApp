@@ -26,10 +26,11 @@ public:
 	VulkanEngine() = default;
 
 	void Init(const std::shared_ptr<GLFWwindow>& window);
-	void DrawFrame(bool dispatchCompute = false);
+	void DrawFrame(const bool dispatchCompute = false);
 	void OnWindowResize(uint32_t width, uint32_t height);
+	void SetViewportSize(uint32_t width, uint32_t height);
 
-	ImTextureID GetRenderTextureID() const { return m_RenderTextureID; }
+	ImTextureID GetRenderTextureID() const { return m_RenderTextureData.GetTexID(); }
 
 	VmaAllocator GetAllocator() const { return m_Allocator; }
 	const RenderTime& GetRenderTime() const { return m_RenderTime; }
@@ -60,7 +61,9 @@ private:
 
 	void InitRenderTargets();
 	void InitBuffers();
+
 	void UpdateDescriptorSets(const Shader& shader) const;
+
 	void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const;
 
 	void CreateTimestampQueryPool();
@@ -82,6 +85,9 @@ private:
 	VkPhysicalDevice m_PhysicalDevice;
 	VkDevice m_Device;
 	VkSurfaceKHR m_Surface{};
+
+	uint32_t m_ViewportWidth = 0;
+	uint32_t m_ViewportHeight = 0;
 
 	VkSwapchainKHR m_Swapchain;
 	VkFormat m_SwapchainImageFormat;
@@ -111,7 +117,7 @@ private:
 	VkDebugUtilsMessengerEXT m_DebugMessenger;
 
 	VkDescriptorPool m_ImGuiPool;
-	ImTextureID m_RenderTextureID;
+	ImTextureData m_RenderTextureData;
 	VkSampler m_RenderSampler;
 
 	RenderTime m_RenderTime;

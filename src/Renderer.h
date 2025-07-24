@@ -23,7 +23,9 @@ class Renderer
 public:
 	Renderer(const std::shared_ptr<GLFWwindow>& window, uint32_t width, uint32_t height);
 	~Renderer();
-	void Resize(uint32_t width, uint32_t height);
+
+	void OnWindowResize(uint32_t width, uint32_t height) const;
+	void ResizeViewport(uint32_t width, uint32_t height);
 
 	void Render();
 
@@ -48,9 +50,9 @@ public:
 
 	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
 private:
-	void UpdateUniformBuffer() const;
-	void UpdateSphereBuffer() const;
-	void UpdateMaterialBuffer() const;
+	void UpdateUniformBuffer(const std::shared_ptr<Scene>& scene) const;
+	void UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const;
+	void UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const;
 private:
 	std::unique_ptr<VulkanEngine> m_Engine;
 	uint32_t m_Width, m_Height;

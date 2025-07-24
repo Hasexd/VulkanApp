@@ -79,10 +79,21 @@ void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(m_Device);
 	RecreateSwapchain(width, height);
+}
+
+void VulkanEngine::SetViewportSize(uint32_t width, uint32_t height)
+{
+	if (width == m_ViewportWidth && height == m_ViewportHeight)
+		return;
+
+	m_ViewportWidth = width;
+	m_ViewportHeight = height;
+
 	RecreateRenderTargets();
 }
 
-void VulkanEngine::DrawFrame(bool dispatchCompute)
+
+void VulkanEngine::DrawFrame(const bool dispatchCompute)
 {
 	FrameData& frame = GetCurrentFrame();
 	vkWaitForFences(m_Device, 1, &frame.RenderFence, VK_TRUE, UINT64_MAX);
@@ -114,7 +125,8 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 	if (dispatchCompute)
 	{
 
-		if (m_FrameNumber > 0) {
+		if (m_FrameNumber > 0) 
+		{
 			TransitionImage(
 				cmd,
 				m_RenderImage.Image,
@@ -133,8 +145,8 @@ void VulkanEngine::DrawFrame(bool dispatchCompute)
 			0, 1, &shader.DescriptorSet,
 			0, nullptr
 		);
-		uint32_t gx = (m_RenderImage.ImageExtent.width + 15) / 16;
-		uint32_t gy = (m_RenderImage.ImageExtent.height + 15) / 16;
+		uint32_t gx = (m_ViewportWidth + 15) / 16;
+		uint32_t gy = (m_ViewportHeight + 15) / 16;
 		vkCmdDispatch(cmd, gx, gy, 1);
 		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 1);
 
@@ -361,7 +373,7 @@ void VulkanEngine::InitShaders()
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 }
 	};
 
-	std::vector rtBindings =
+	const std::vector rtBindings =
 	{
 		DescriptorBinding(m_RenderImage),
 		DescriptorBinding(m_AccumulationImage),
@@ -371,7 +383,10 @@ void VulkanEngine::InitShaders()
 	};
 
 	CreateShader(ShaderName::RAY_TRACING, rtBindings, "../shaders/compiled/ray_tracing.spv");
-	UpdateDescriptorSets(m_Shaders[ShaderName::RAY_TRACING]);
+
+	const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
+
+	UpdateDescriptorSets(rtShader);
 }
 
 void VulkanEngine::CreateShader(const ShaderName& shaderName,
@@ -493,7 +508,6 @@ void VulkanEngine::CreateShader(const ShaderName& shaderName,
 void VulkanEngine::UpdateDescriptorSets(const Shader& shader) const
 {
 	std::vector<VkWriteDescriptorSet> descriptorWrites;
-	descriptorWrites.reserve(shader.Bindings.size());
 
 	for (size_t i = 0; i < shader.Bindings.size(); ++i)
 	{
@@ -534,31 +548,39 @@ void VulkanEngine::InitBuffers()
 
 void VulkanEngine::InitRenderTargets()
 {
-	int width, height;
-	glfwGetFramebufferSize(m_Window.get(), &width, &height);
+	uint32_t width = m_ViewportWidth, height = m_ViewportHeight;
 
-	const VkExtent3D imageExtent = {
-		.width = static_cast<uint32_t>(width),
-		.height = static_cast<uint32_t>(height),
-		.depth = 1
+	if (!width || !height)
+	{
+		width = 1080;
+		height = 720;
+	}
+	const VkExtent3D imageExtent = 
+	{
+		width,
+		height,
+		1
 	};
+
 	m_RenderImage = CreateImage(imageExtent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
 
-	TransitionImageLayout(m_RenderImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	TransitionImageLayout(m_RenderImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	const VkExtent3D accumExtent = {
-		.width = static_cast<uint32_t>(width),
-		.height = static_cast<uint32_t>(height),
+	const VkExtent3D accumExtent = 
+	{
+		.width = width,
+		.height = height,
 		.depth = 1
 	};
 
-	m_AccumulationImage = CreateImage(accumExtent, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT |
+	m_AccumulationImage = CreateImage(accumExtent, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
 	TransitionImageLayout(m_AccumulationImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-	if (m_RenderSampler == VK_NULL_HANDLE) {
+	if (m_RenderSampler == VK_NULL_HANDLE) 
+	{
 		VkSamplerCreateInfo samplerInfo{};
 
 		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -571,13 +593,12 @@ void VulkanEngine::InitRenderTargets()
 		vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_RenderSampler);
 	}
 
-	m_RenderTextureID = reinterpret_cast<ImTextureID>(ImGui_ImplVulkan_AddTexture(
+	m_RenderTextureData.SetTexID(reinterpret_cast<ImTextureID>(ImGui_ImplVulkan_AddTexture(
 		m_RenderSampler,
 		m_RenderImage.ImageView,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-	));
+	)));
 }
-
 
 void VulkanEngine::InitSyncStructures()
 {
@@ -744,10 +765,11 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 	allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 	allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-	if (vmaCreateImage(m_Allocator, &imageInfo, &allocInfo,
-		&newImage.Image, &newImage.Allocation, nullptr))
+	VkResult result = vmaCreateImage(m_Allocator, &imageInfo, &allocInfo,
+		&newImage.Image, &newImage.Allocation, nullptr);
+	if (result != VK_SUCCESS) 
 	{
-		std::println("Failed to create a vulkan image");
+		std::println("Failed to create vulkan image: {}", (int)result);
 		return {};
 	}
 
@@ -755,23 +777,39 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = newImage.Image;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = newImage.ImageFormat;
-	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	viewInfo.format = format;
 	viewInfo.subresourceRange.baseMipLevel = 0;
 	viewInfo.subresourceRange.levelCount = 1;
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 1;
 
-	if (vkCreateImageView(m_Device, &viewInfo, nullptr, &newImage.ImageView))
+	if (format >= VK_FORMAT_D16_UNORM && format <= VK_FORMAT_D32_SFLOAT_S8_UINT) 
 	{
-		std::println("Failed to create image view for render target");
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+		if (format == VK_FORMAT_D16_UNORM_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT ||
+			format == VK_FORMAT_D32_SFLOAT_S8_UINT) 
+		{
+			viewInfo.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+	}
+	else 
+	{
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	}
+
+	result = vkCreateImageView(m_Device, &viewInfo, nullptr, &newImage.ImageView);
+	if (result != VK_SUCCESS) 
+	{
+		std::println("Failed to create image view: {}", (int)result);
+		vmaDestroyImage(m_Allocator, newImage.Image, newImage.Allocation);
 		return {};
 	}
 
 	return newImage;
 }
-
-AllocatedBuffer VulkanEngine::CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const {
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const
+{
 	AllocatedBuffer buffer;
 
 	VkBufferCreateInfo bufferInfo = {};
