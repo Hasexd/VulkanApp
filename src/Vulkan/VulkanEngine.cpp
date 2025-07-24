@@ -7,7 +7,7 @@
 
 namespace
 {
-	void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout)
+	void TransitionImage(const VkCommandBuffer cmd, const VkImage image, const VkImageLayout currentLayout, const VkImageLayout newLayout)
 	{
 		VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
 		imageBarrier.pNext = nullptr;
@@ -46,7 +46,8 @@ namespace
 		auto const fileSize = static_cast<size_t>(file.tellg());
 		file.seekg(0, std::ios::beg);
 
-		if (fileSize % 4 != 0) {
+		if (fileSize % 4 != 0) 
+		{
 			std::println("Shader file size not a multiple of 4: {} bytes", fileSize);
 			return {};
 		}
@@ -61,6 +62,7 @@ namespace
 void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 {
 	m_Window = window;
+	m_FileWatcher = FileWatcher("../shaders", std::chrono::milliseconds(5000));
 
 	InitDevices();
 	InitSwapchain();
@@ -72,16 +74,79 @@ void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 	InitShaders();
 	CreateTimestampQueryPool();
 
+	auto compileShader = [this](const std::string& shaderPath) -> bool
+	{
+			const std::filesystem::path filePath(shaderPath);
+			const std::string fileName = filePath.stem().string();
+
+			std::lock_guard lock(m_SystemMutex);
+
+			std::string command = std::format("glslang -V {} -o ../shaders/compiled/{}.spv",
+				filePath.lexically_normal().string(), fileName);
+
+			std::println("Compiling: {}", command);
+
+			return std::system(command.c_str()) == 0;
+	};
+
+	m_FileWatcherThread = std::jthread([this, compileShader]()
+		{
+			m_FileWatcher.Start([this, compileShader](const std::string& pathToWatch, FileStatus status) -> void
+				{
+					if (!std::filesystem::is_regular_file(std::filesystem::path(pathToWatch)) && status != FileStatus::ERASED)
+						return;
+
+					const std::filesystem::path shaderPath(pathToWatch);
+
+					if (status != FileStatus::ERASED && shaderPath.extension().string() != ".comp")
+						return;
+
+					switch (status)
+					{
+					case FileStatus::CREATED:
+					case FileStatus::MODIFIED:
+					{
+						std::println("Shader {}: {}",
+							status == FileStatus::CREATED ? "Created" : "Modified",
+							pathToWatch);
+
+						if (compileShader(pathToWatch))
+						{
+							std::println("✓ Compiled to: compiled/{}.spv", shaderPath.stem().string());
+
+
+							vkQueueWaitIdle(m_GraphicsQueue);
+
+							const Shader& shader = m_Shaders.at(ShaderName::RAY_TRACING);
+							const auto bindings = shader.Bindings;
+							shader.Destroy(m_Device);
+
+							CreateShader(ShaderName::RAY_TRACING, bindings, "../shaders/compiled/ray_tracing.spv");
+							UpdateDescriptorSets(m_Shaders[ShaderName::RAY_TRACING]);
+						}
+						else
+						{
+							std::println("✗ Compilation failed: {}", shaderPath.stem().string());
+						}
+						break;
+					}
+					case FileStatus::ERASED:
+						std::println("Shader erased: {}", pathToWatch);
+						break;
+					}
+				});
+		});
+
 	IsInitialized = true;
 }
 
-void VulkanEngine::OnWindowResize(uint32_t width, uint32_t height)
+void VulkanEngine::OnWindowResize(const uint32_t width, const uint32_t height)
 {
 	vkDeviceWaitIdle(m_Device);
 	RecreateSwapchain(width, height);
 }
 
-void VulkanEngine::SetViewportSize(uint32_t width, uint32_t height)
+void VulkanEngine::SetViewportSize(const uint32_t width, const uint32_t height)
 {
 	if (width == m_ViewportWidth && height == m_ViewportHeight)
 		return;
@@ -269,7 +334,7 @@ void VulkanEngine::UpdateTimings()
 	}
 }
 
-void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) const
+void VulkanEngine::DrawImGui(const VkCommandBuffer cmd, const VkImageView targetImageView) const
 {
 	VkRenderingAttachmentInfo colorAttachmentInfo{};
 	colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -293,7 +358,6 @@ void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) c
 	vkCmdBeginRendering(cmd, &renderInfo);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 	vkCmdEndRendering(cmd);
-	
 }
 
 void VulkanEngine::RecreateSwapchain(uint32_t width, uint32_t height)
@@ -497,12 +561,13 @@ void VulkanEngine::CreateShader(const ShaderName& shaderName,
 
 	vkDestroyShaderModule(m_Device, computeShaderModule, nullptr);
 
+
 	m_Shaders[shaderName] = shader;
 
-	m_MainDeletionQueue.PushFunction([this, shader]() -> void
+	/*m_MainDeletionQueue.PushFunction([this, shader]() -> void
 	{
 		shader.Destroy(m_Device);
-	});
+	});*/
 }
 
 void VulkanEngine::UpdateDescriptorSets(const Shader& shader) const
@@ -555,7 +620,7 @@ void VulkanEngine::InitRenderTargets()
 		width = 1080;
 		height = 720;
 	}
-	const VkExtent3D imageExtent = 
+	const VkExtent3D imageExtent =  
 	{
 		width,
 		height,
@@ -564,6 +629,11 @@ void VulkanEngine::InitRenderTargets()
 
 	m_RenderImage = CreateImage(imageExtent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+
+	if (m_RenderImage.ImageView == VK_NULL_HANDLE)
+	{
+		CreateImageView(m_RenderImage, m_RenderImage.ImageFormat);
+	}
 
 	TransitionImageLayout(m_RenderImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
@@ -576,6 +646,11 @@ void VulkanEngine::InitRenderTargets()
 
 	m_AccumulationImage = CreateImage(accumExtent, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+
+	if (m_AccumulationImage.ImageView == VK_NULL_HANDLE)
+	{
+		CreateImageView(m_AccumulationImage, m_AccumulationImage.ImageFormat);
+	}
 
 	TransitionImageLayout(m_AccumulationImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
@@ -765,17 +840,24 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 	allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 	allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-	VkResult result = vmaCreateImage(m_Allocator, &imageInfo, &allocInfo,
+	const VkResult result = vmaCreateImage(m_Allocator, &imageInfo, &allocInfo,
 		&newImage.Image, &newImage.Allocation, nullptr);
-	if (result != VK_SUCCESS) 
+
+	if (result != VK_SUCCESS)
 	{
-		std::println("Failed to create vulkan image: {}", (int)result);
+		std::println("Failed to create vulkan image: {}", static_cast<int>(result));
 		return {};
 	}
 
+	return newImage;
+}
+
+
+void VulkanEngine::CreateImageView(AllocatedImage& image, const VkFormat format) const
+{
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = newImage.Image;
+	viewInfo.image = image.Image;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = format;
 	viewInfo.subresourceRange.baseMipLevel = 0;
@@ -783,31 +865,28 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 1;
 
-	if (format >= VK_FORMAT_D16_UNORM && format <= VK_FORMAT_D32_SFLOAT_S8_UINT) 
+	if (format >= VK_FORMAT_D16_UNORM && format <= VK_FORMAT_D32_SFLOAT_S8_UINT)
 	{
 		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
 		if (format == VK_FORMAT_D16_UNORM_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT ||
-			format == VK_FORMAT_D32_SFLOAT_S8_UINT) 
+			format == VK_FORMAT_D32_SFLOAT_S8_UINT)
 		{
 			viewInfo.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 		}
 	}
-	else 
+	else
 	{
 		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	}
 
-	result = vkCreateImageView(m_Device, &viewInfo, nullptr, &newImage.ImageView);
-	if (result != VK_SUCCESS) 
+	if (const VkResult result = vkCreateImageView(m_Device, &viewInfo, nullptr, &image.ImageView))
 	{
-		std::println("Failed to create image view: {}", (int)result);
-		vmaDestroyImage(m_Allocator, newImage.Image, newImage.Allocation);
-		return {};
+		std::println("Failed to create image view: {}", static_cast<int>(result));
+		vmaDestroyImage(m_Allocator, image.Image, image.Allocation);
 	}
-
-	return newImage;
 }
+
 AllocatedBuffer VulkanEngine::CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const
 {
 	AllocatedBuffer buffer;
@@ -872,18 +951,12 @@ FrameData& VulkanEngine::GetCurrentFrame()
 
 void VulkanEngine::DestroyImage(AllocatedImage& image) const
 {
-	if (image.ImageView != VK_NULL_HANDLE) {
-		vkDestroyImageView(m_Device, image.ImageView, nullptr);
-		image.ImageView = VK_NULL_HANDLE;
-	}
-
-	if (image.Image != VK_NULL_HANDLE) {
+	if (image.Image != VK_NULL_HANDLE) 
+	{
 		vmaDestroyImage(m_Allocator, image.Image, image.Allocation);
-		image.Image = VK_NULL_HANDLE;
 		image.Allocation = nullptr;
+		image.ImageFormat = VK_FORMAT_UNDEFINED;
 	}
-
-	image.ImageFormat = VK_FORMAT_UNDEFINED;
 }
 
 void VulkanEngine::ResetAccumulation() const

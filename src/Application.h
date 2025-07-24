@@ -63,5 +63,4 @@ private:
 
 	std::shared_ptr<Scene> m_CurrentScene;
 	std::string m_CurrentSceneName;
-
 };
