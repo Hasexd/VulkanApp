@@ -57,6 +57,16 @@ namespace
 
 		return buffer;
 	}
+
+	ShaderName StringToShaderName(const std::string& string)
+	{
+		if (string == "ray_tracing")
+			return ShaderName::RAY_TRACING;
+		if (string == "bloom")
+			return ShaderName::BLOOM;
+
+		return ShaderName::NONE;
+	}
 }
 
 void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
@@ -104,25 +114,33 @@ void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 					switch (status)
 					{
 					case FileStatus::CREATED:
+						std::println("New shader created: {}", pathToWatch);
+						break;
 					case FileStatus::MODIFIED:
 					{
-						std::println("Shader {}: {}",
-							status == FileStatus::CREATED ? "Created" : "Modified",
-							pathToWatch);
+						std::println("Shader modified: {}", pathToWatch);
 
 						if (compileShader(pathToWatch))
 						{
-							std::println("✓ Compiled to: compiled/{}.spv", shaderPath.stem().string());
-
+							const std::string& fileName = shaderPath.stem().string();
+							std::println("✓ Compiled to: compiled/{}.spv", fileName);
 
 							vkQueueWaitIdle(m_GraphicsQueue);
 
-							const Shader& shader = m_Shaders.at(ShaderName::RAY_TRACING);
+							const ShaderName shaderName = StringToShaderName(fileName);
+
+							if (shaderName == ShaderName::NONE)
+							{
+								std::println("✗ Unknown shader name: {}", fileName);
+								break;
+							}
+
+							const Shader& shader = m_Shaders.at(shaderName);
 							const auto bindings = shader.Bindings;
 							shader.Destroy(m_Device);
 
-							CreateShader(ShaderName::RAY_TRACING, bindings, "../shaders/compiled/ray_tracing.spv");
-							UpdateDescriptorSets(m_Shaders[ShaderName::RAY_TRACING]);
+							CreateShader(shaderName, bindings, std::format("../shaders/compiled/{}.spv", fileName));
+							UpdateDescriptorSets(m_Shaders[shaderName]);
 						}
 						else
 						{
@@ -1007,6 +1025,11 @@ void VulkanEngine::Cleanup()
 		vkDestroySampler(m_Device, m_RenderSampler, nullptr);
 		vkDestroyQueryPool(m_Device, m_TimestampQueryPool, nullptr);
 
+		for (const auto& shader : m_Shaders)
+		{
+			shader.second.Destroy(m_Device);
+		}
+
 		for (const auto& frame : m_Frames)
 		{
 			vkDestroyCommandPool(m_Device, frame.CommandPool, nullptr);
@@ -1021,6 +1044,9 @@ void VulkanEngine::Cleanup()
 
 		DestroyImage(m_RenderImage);
 		DestroyImage(m_AccumulationImage);
+
+		vkDestroyImageView(m_Device, m_RenderImage.ImageView, nullptr);
+		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
 
 		m_MainDeletionQueue.Flush();
 
