@@ -20,6 +20,7 @@ public:
 	FileWatcher() = default;
 	explicit FileWatcher(const std::filesystem::path& pathToWatch, std::chrono::duration<int, std::milli> delay);
 	void Start(const std::function<void(const std::string&, FileStatus)>& action);
+	void Stop() { m_Running = false; }
 
 private:
 	std::filesystem::path m_PathToWatch;

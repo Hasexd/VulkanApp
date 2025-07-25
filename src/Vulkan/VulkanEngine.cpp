@@ -72,7 +72,7 @@ namespace
 void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 {
 	m_Window = window;
-	m_FileWatcher = FileWatcher("../shaders", std::chrono::milliseconds(5000));
+	m_FileWatcher = FileWatcher("../shaders", std::chrono::milliseconds(1500));
 
 	InitDevices();
 	InitSwapchain();
@@ -300,11 +300,13 @@ void VulkanEngine::RecreateRenderTargets()
 
 	if (m_RenderImage.Image != VK_NULL_HANDLE)
 	{
+		vkDestroyImageView(m_Device, m_RenderImage.ImageView, nullptr);
 		DestroyImage(m_RenderImage);
 	}
 
 	if (m_AccumulationImage.Image != VK_NULL_HANDLE)
 	{
+		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
 		DestroyImage(m_AccumulationImage);
 	}
 
@@ -1059,6 +1061,9 @@ void VulkanEngine::Cleanup()
 
 		vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger, nullptr);
 		vkDestroyInstance(m_Instance, nullptr);
+
+		m_FileWatcher.Stop();
+		m_FileWatcherThread.detach();
 		IsInitialized = false;
 	}
 }
