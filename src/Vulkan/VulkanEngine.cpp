@@ -180,6 +180,7 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 {
 	FrameData& frame = GetCurrentFrame();
 	vkWaitForFences(m_Device, 1, &frame.RenderFence, VK_TRUE, UINT64_MAX);
+	vkDeviceWaitIdle(m_Device);
 
 	if (m_FrameNumber > 0)
 		UpdateTimings();
@@ -707,7 +708,7 @@ void VulkanEngine::InitSyncStructures()
 	semaphoreCreateInfo.pNext = nullptr;
 	semaphoreCreateInfo.flags = 0;
 
-	for (uint32_t i = 0; i < m_FrameOverlap; i++)
+	for (uint32_t i = 0; i < m_Frames.size(); i++)
 	{
 		vkCreateFence(m_Device, &fenceCreateInfo, nullptr, &m_Frames[i].RenderFence);
 		vkCreateSemaphore(m_Device, &semaphoreCreateInfo, nullptr, &m_Frames[i].SwapchainSemaphore);
@@ -730,7 +731,7 @@ void VulkanEngine::InitCommands()
 	commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	commandPoolInfo.queueFamilyIndex = m_GraphicsQueueFamily;
 
-	for (uint32_t i = 0; i < m_FrameOverlap; i++)
+	for (uint32_t i = 0; i < m_Frames.size(); i++)
 	{
 		vkCreateCommandPool(m_Device, &commandPoolInfo, nullptr, &m_Frames[i].CommandPool);
 
@@ -952,6 +953,8 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 	m_Swapchain = vkbSwapchain.swapchain;
 	m_SwapchainImages = vkbSwapchain.get_images().value();
 	m_SwapchainImageViews = vkbSwapchain.get_image_views().value();
+
+	m_Frames.resize(m_SwapchainImages.size());
 }
 
 void VulkanEngine::CreateTimestampQueryPool()
@@ -966,7 +969,7 @@ void VulkanEngine::CreateTimestampQueryPool()
 
 FrameData& VulkanEngine::GetCurrentFrame()
 {
-	return m_Frames[m_FrameNumber % m_FrameOverlap];
+	return m_Frames[m_FrameNumber % m_Frames.size()];
 }
 
 void VulkanEngine::DestroyImage(AllocatedImage& image) const

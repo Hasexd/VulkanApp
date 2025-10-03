@@ -100,8 +100,7 @@ private:
 	std::vector<VkImage> m_SwapchainImages;
 	std::vector<VkImageView> m_SwapchainImageViews;
 
-	static constexpr uint32_t m_FrameOverlap = 2;
-	FrameData m_Frames[m_FrameOverlap];
+	std::vector<FrameData> m_Frames;
 	uint32_t m_FrameNumber = 0;
 
 	VkQueue m_GraphicsQueue;
