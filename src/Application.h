@@ -63,4 +63,6 @@ private:
 
 	std::shared_ptr<Scene> m_CurrentScene;
 	std::string m_CurrentSceneName;
+
+	int m_SelectedSphereIndex = -1;
 };

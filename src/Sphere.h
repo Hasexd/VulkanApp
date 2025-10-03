@@ -3,6 +3,7 @@
 #include <tuple>
 
 #include <glm.hpp>
+#include <string>
 
 #include "Ray.h"
 #include "Material.h"
@@ -10,10 +11,11 @@
 class Sphere
 {
 public:
-	Sphere(const glm::vec3& position, float radius, uint32_t materialIndex);
+	Sphere(const std::string& name, const glm::vec3& position, float radius, uint32_t materialIndex);
 
 	bool Intersects(const Ray& ray, glm::vec3& outHitNear, glm::vec3& outHitFar) const;
 
+	const std::string& GetName() const { return m_Name; }
 	float GetRadius() const { return m_Radius; }
 	glm::vec3 GetPosition() const { return m_Position; }
 	uint32_t GetMaterialIndex() const { return m_MaterialIndex; }
@@ -23,6 +25,7 @@ public:
 	uint32_t& GetMaterialIndex()  { return m_MaterialIndex; }
 
 private:
+	std::string m_Name;
 	glm::vec3 m_Position;
 	float m_Radius;
 	uint32_t m_MaterialIndex;

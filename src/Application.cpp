@@ -133,14 +133,27 @@ void Application::DrawImGui()
 		ImGui::End();
 		ImGui::PopStyleVar(2);
 
-		ImGui::Begin("Scene Components");
-
+		ImGui::Begin("Scene objects");
+		
 		for (size_t i = 0; i < m_CurrentScene->GetSpheres().size(); i++)
 		{
 			Sphere& sphere = m_CurrentScene->GetSpheres()[i];
+
+			if(ImGui::Selectable(sphere.GetName().c_str(), false))
+			{
+				m_SelectedSphereIndex = static_cast<int>(i);
+			}
+
+		}
+		ImGui::End();
+
+		ImGui::Begin("Object details");
+
+		if (m_SelectedSphereIndex != -1 && !m_CurrentScene->GetSpheres().empty())
+		{
+			Sphere& sphere = m_CurrentScene->GetSpheres()[m_SelectedSphereIndex];
 			Material& material = m_CurrentScene->GetMaterials()[sphere.GetMaterialIndex()];
 
-			ImGui::PushID(static_cast<int>(i));
 
 			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
 				sceneChanged = true;
@@ -158,10 +171,8 @@ void Application::DrawImGui()
 				if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
 					sceneChanged = true;
 			}
-
-			ImGui::Separator();
-			ImGui::PopID();
 		}
+
 		ImGui::End();
 
 
@@ -464,11 +475,12 @@ void Application::LoadJSONScenes()
 					scene.GetSpheres().reserve(spheresJson.size());
 					for (const auto& jsonSphere : spheresJson)
 					{
+						const std::string& name = jsonSphere["Name"];
 						const glm::vec3 position = { jsonSphere["Position"][0], jsonSphere["Position"][1], jsonSphere["Position"][2]};
 						const float radius = jsonSphere["Radius"];
 						const uint32_t materialIndex = jsonSphere["MaterialIndex"];
 
-						scene.GetSpheres().emplace_back(position, radius, materialIndex);
+						scene.GetSpheres().emplace_back(name, position, radius, materialIndex);
 					}
 				}
 
@@ -525,6 +537,8 @@ void Application::SaveJSONScenes()
 		{
 			json sphereJson;
 			glm::vec3 pos = sphere.GetPosition();
+
+			sphereJson["Name"] = sphere.GetName();
 			sphereJson["Position"] = { pos.x, pos.y, pos.z };
 			sphereJson["Radius"] = sphere.GetRadius();
 			sphereJson["MaterialIndex"] = sphere.GetMaterialIndex();
