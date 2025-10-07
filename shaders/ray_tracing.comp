@@ -65,23 +65,23 @@ layout(std430, binding = 4) buffer MaterialBuffer
 const float PI = 3.14159265359;
 const float EPSILON = 0.0001;
 
-uint pcgHash(uint inpt) 
+uint PcgHash(uint inpt) 
 {
     uint state = inpt * 747796405u + 2891336453u;
     uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
 }
 
-float randomFloat(inout uint seed) 
+float RandomFloat(inout uint seed) 
 {
-    seed = pcgHash(seed);
+    seed = PcgHash(seed);
     return float(seed) / float(0xFFFFFFFFu);
 }
 
-vec3 cosineWeightedHemisphere(vec3 normal, inout uint seed) 
+vec3 CosineWeightedHemisphere(vec3 normal, inout uint seed) 
 {
-    float r1 = randomFloat(seed);
-    float r2 = randomFloat(seed);
+    float r1 = RandomFloat(seed);
+    float r2 = RandomFloat(seed);
 
     float cosTheta = sqrt(r1);
     float sinTheta = sqrt(1.0 - r1);
@@ -209,7 +209,7 @@ vec4 RayGen(vec2 coord, uint sampleCount)
             throughput *= material.Color;
 
             ray.Origin = hit.WorldPosition + hit.WorldNormal * EPSILON;
-            ray.Direction = cosineWeightedHemisphere(hit.WorldNormal, seed);
+            ray.Direction = CosineWeightedHemisphere(hit.WorldNormal, seed);
         }
         else
         {

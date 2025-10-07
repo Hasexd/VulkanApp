@@ -251,6 +251,18 @@ void Application::HandleKeyboardInput(Camera& camera)
 		m_EPressed = false;
 	}
 
+	if (glfwGetKey(m_Window.get(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS &&
+		glfwGetKey(m_Window.get(), GLFW_KEY_R) == GLFW_PRESS &&
+		!m_ShaderReloadRequested)
+	{
+		m_ShaderReloadRequested = true;
+		m_Renderer->ReloadShaders();
+	}
+	else
+	{
+		m_ShaderReloadRequested = false;
+	}
+
 	glm::vec3 movement(0.0f);
 	if (glfwGetKey(m_Window.get(), GLFW_KEY_W) == GLFW_PRESS)
 		movement -= camera.GetDirection();
@@ -260,7 +272,6 @@ void Application::HandleKeyboardInput(Camera& camera)
 		movement -= camera.GetRight();
 	if (glfwGetKey(m_Window.get(), GLFW_KEY_D) == GLFW_PRESS)
 		movement += camera.GetRight();
-
 
 	if (glm::length(movement) > 0.0f)
 	{

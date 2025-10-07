@@ -28,7 +28,7 @@ public:
 	void ResizeViewport(uint32_t width, uint32_t height);
 
 	void Render();
-
+	void ReloadShaders();
 
 	void SetScene(const std::shared_ptr<Scene>& scene) { m_CurrentScene = scene; }
 

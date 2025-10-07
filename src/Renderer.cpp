@@ -134,6 +134,12 @@ void Renderer::UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const
 	vmaUnmapMemory(m_Engine->GetAllocator(), m_Engine->MaterialBuffer.Allocation);
 }
 
+void Renderer::ReloadShaders()
+{
+	m_Engine->ReloadShaders();
+	ResetAccumulation();
+}
+
 void Renderer::ResetAccumulation()
 {
 	m_SampleCount = 1;

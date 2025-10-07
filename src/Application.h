@@ -54,6 +54,7 @@ private:
 	bool m_QPressed = false;
 	bool m_EPressed = false;
 	bool m_ViewportHovered = false;
+	bool m_ShaderReloadRequested = false;
 
 	uint32_t m_ViewportWidth;
 	uint32_t m_ViewportHeight;

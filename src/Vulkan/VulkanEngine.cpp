@@ -37,8 +37,6 @@ namespace
 		vkCmdPipelineBarrier2(cmd, &depInfo);
 	}
 
-	
-
 	std::vector<uint32_t> LoadShaderFromFile(const std::filesystem::path& path)
 	{
 		std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -60,19 +58,32 @@ namespace
 
 	ShaderName StringToShaderName(const std::string& string)
 	{
-		if (string == "ray_tracing")
+		if (string == "ray_tracing" || string == "ray_tracing.comp")
 			return ShaderName::RAY_TRACING;
-		if (string == "bloom")
+		if (string == "bloom" || string == "bloom.comp")
 			return ShaderName::BLOOM;
 
 		return ShaderName::NONE;
+	}
+
+	bool CompileShader(const std::filesystem::path& path)
+	{
+		const std::string fileName = path.stem().string();
+		const std::filesystem::path pathToCompiled = path.parent_path() / "compiled";
+
+		std::string command = std::format("glslang -V {} -o {}/{}.spv",
+			path.string(), pathToCompiled.string(), fileName);
+
+		std::println("Compiling: {}", command);
+
+		return std::system(command.c_str()) == 0;
 	}
 }
 
 void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 {
 	m_Window = window;
-	m_FileWatcher = FileWatcher("../shaders", std::chrono::milliseconds(1500));
+	m_FileWatcher = FileWatcher(m_ShadersPath, std::chrono::milliseconds(1500));
 
 	InitDevices();
 	InitSwapchain();
@@ -84,78 +95,86 @@ void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 	InitShaders();
 	CreateTimestampQueryPool();
 
-	auto compileShader = [this](const std::string& shaderPath) -> bool
-	{
-			const std::filesystem::path filePath(shaderPath);
-			const std::string fileName = filePath.stem().string();
-
-			std::lock_guard lock(m_SystemMutex);
-
-			std::string command = std::format("glslang -V {} -o ../shaders/compiled/{}.spv",
-				filePath.lexically_normal().string(), fileName);
-
-			std::println("Compiling: {}", command);
-
-			return std::system(command.c_str()) == 0;
-	};
-
-	m_FileWatcherThread = std::jthread([this, compileShader]()
+	m_FileWatcherFuture = std::async(std::launch::async, [this]() -> void
 		{
-			m_FileWatcher.Start([this, compileShader](const std::string& pathToWatch, FileStatus status) -> void
-				{
-					if (!std::filesystem::is_regular_file(std::filesystem::path(pathToWatch)) && status != FileStatus::ERASED)
-						return;
-
-					const std::filesystem::path shaderPath(pathToWatch);
-
-					if (status != FileStatus::ERASED && shaderPath.extension().string() != ".comp")
-						return;
-
-					switch (status)
-					{
-					case FileStatus::CREATED:
-						std::println("New shader created: {}", pathToWatch);
-						break;
-					case FileStatus::MODIFIED:
-					{
-						std::println("Shader modified: {}", pathToWatch);
-
-						if (compileShader(pathToWatch))
-						{
-							const std::string& fileName = shaderPath.stem().string();
-							std::println("✓ Compiled to: compiled/{}.spv", fileName);
-
-							vkQueueWaitIdle(m_GraphicsQueue);
-
-							const ShaderName shaderName = StringToShaderName(fileName);
-
-							if (shaderName == ShaderName::NONE)
-							{
-								std::println("✗ Unknown shader name: {}", fileName);
-								break;
-							}
-
-							const Shader& shader = m_Shaders.at(shaderName);
-							const auto bindings = shader.Bindings;
-							shader.Destroy(m_Device);
-
-							CreateShader(shaderName, bindings, std::format("../shaders/compiled/{}.spv", fileName));
-							UpdateDescriptorSets(m_Shaders[shaderName]);
-						}
-						else
-						{
-							std::println("✗ Compilation failed: {}", shaderPath.stem().string());
-						}
-						break;
-					}
-					case FileStatus::ERASED:
-						std::println("Shader erased: {}", pathToWatch);
-						break;
-					}
-				});
+			MonitorShaders();
 		});
 
 	IsInitialized = true;
+}
+
+void VulkanEngine::ReloadShaders()
+{
+	if (!m_ShadersNeedReload)
+		return;
+
+	for (const auto& shaderName : m_ChangedShaderFiles)
+	{
+		const std::filesystem::path shaderPath = m_ShadersPath / shaderName;
+
+		if (CompileShader(shaderPath))
+		{
+			const std::string& fileName = shaderPath.stem().string();
+			std::println("Compiled to: compiled/{}.spv", fileName);
+
+			vkQueueWaitIdle(m_GraphicsQueue);
+
+			const ShaderName shaderName = StringToShaderName(fileName);
+
+			if (shaderName == ShaderName::NONE)
+			{
+				std::println("Unknown shader name: {}", fileName);
+				return;
+			}
+
+			const Shader& shader = m_Shaders.at(shaderName);
+			const auto& bindings = shader.Bindings;
+			shader.Destroy(m_Device);
+
+			CreateShader(shaderName, bindings, std::format("../shaders/compiled/{}.spv", fileName));
+			UpdateDescriptorSets(m_Shaders[shaderName]);
+		}
+		else
+		{
+			std::println("Compilation failed : {}", m_ShadersPath.stem().string());
+		}
+	}
+
+	m_ShadersNeedReload = false;
+}
+
+void VulkanEngine::MonitorShaders()
+{
+	m_FileWatcher.Start([this](const std::string& pathToWatch, FileStatus status) -> void 
+		{
+			if (!std::filesystem::is_regular_file(std::filesystem::path(pathToWatch)) && status != FileStatus::ERASED)
+				return;
+
+			const std::filesystem::path shaderPath(pathToWatch);
+
+			if (status != FileStatus::ERASED && shaderPath.extension().string() != ".comp")
+				return;
+
+			size_t lastSlash = pathToWatch.find_last_of("/\\");
+			std::string fileName = (lastSlash == std::string::npos) ? pathToWatch : pathToWatch.substr(lastSlash + 1);
+
+			switch (status)
+			{
+			case FileStatus::CREATED:
+				std::println("New shader created: {}", fileName);
+				break;
+			case FileStatus::MODIFIED:
+			{
+				std::println("Shader modified: {}", fileName);
+				m_ChangedShaderFiles.emplace_back(fileName);
+				m_ShadersNeedReload = true;
+				break;
+			}
+			case FileStatus::ERASED:
+				std::println("Shader erased: {}", fileName);
+				break;
+			}
+	});
 }
 
 void VulkanEngine::OnWindowResize(const uint32_t width, const uint32_t height)
@@ -1066,7 +1085,6 @@ void VulkanEngine::Cleanup()
 		vkDestroyInstance(m_Instance, nullptr);
 
 		m_FileWatcher.Stop();
-		m_FileWatcherThread.detach();
 		IsInitialized = false;
 	}
 }

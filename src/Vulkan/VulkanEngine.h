@@ -7,7 +7,7 @@
 #include <array>
 #include <print>
 #include <fstream>
-#include <mutex>
+#include <future>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -32,6 +32,7 @@ public:
 	void DrawFrame(bool dispatchCompute = false);
 	void OnWindowResize(uint32_t width, uint32_t height);
 	void SetViewportSize(uint32_t width, uint32_t height);
+	void ReloadShaders();
 
 	[[nodiscard]] ImTextureID GetRenderTextureID() const { return m_RenderTextureData.GetTexID(); }
 
@@ -81,6 +82,7 @@ private:
 	void DestroySwapchain();
 	void DestroyImage(AllocatedImage& image) const;
 
+	void MonitorShaders();
 
 	FrameData& GetCurrentFrame();
 private:
@@ -129,6 +131,9 @@ private:
 	DeletionQueue m_MainDeletionQueue;
 
 	FileWatcher m_FileWatcher;
-	std::jthread m_FileWatcherThread;
-	std::mutex m_SystemMutex;
+	std::future<void> m_FileWatcherFuture;
+
+	std::vector<std::string> m_ChangedShaderFiles;
+	std::atomic<bool> m_ShadersNeedReload = false;
+	std::filesystem::path m_ShadersPath = std::filesystem::current_path().parent_path() / "shaders";
 };
