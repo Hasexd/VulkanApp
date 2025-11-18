@@ -12,7 +12,6 @@
 #include <thread>
 
 #include "Camera.h"
-#include "Random.h"
 #include "Ray.h"
 #include "Sphere.h"
 #include "Scene.h"
@@ -24,20 +23,14 @@ class Renderer
 public:
 	Renderer(const std::shared_ptr<GLFWwindow>& window, uint32_t width, uint32_t height);
 	~Renderer();
-	void Resize(uint32_t width, uint32_t height);
+
+	void OnWindowResize(uint32_t width, uint32_t height) const;
+	void ResizeViewport(uint32_t width, uint32_t height);
 
 	void Render();
-	glm::vec4 RayGen(const glm::vec2& coord, uint32_t sampleCount, const std::shared_ptr<Scene>& scene) const;
+	void ReloadShaders();
 
-
-	static HitPayload TraceRay(const Ray& ray, const std::shared_ptr<Scene>& scene);
-	static HitPayload ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex, const std::shared_ptr<Scene>& scene);
-	static HitPayload Miss(const Ray& ray);
-
-	uint32_t* GetData() const { return m_PixelData.get(); }
 	void SetScene(const std::shared_ptr<Scene>& scene) { m_CurrentScene = scene; }
-
-	void AsyncTileBasedRendering(const std::shared_ptr<Scene>& scene);
 
 	void ResetAccumulation();
 	void SetAccumulation(bool enabled) { m_AccumulationEnabled = enabled; }
@@ -52,25 +45,24 @@ public:
 	uint32_t GetMaxSamples() const { return m_MaxSamples; }
 	uint32_t& GetMaxSamples() { return m_MaxSamples; }
 
+	const RenderTime& GetRenderTime() const { return m_Engine->GetRenderTime(); }
+	ImTextureID GetRenderTextureID() const { return m_Engine->GetRenderTextureID(); }
 
 	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
+private:
+	void UpdateUniformBuffer(const std::shared_ptr<Scene>& scene) const;
+	void UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const;
+	void UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const;
 private:
 	std::unique_ptr<VulkanEngine> m_Engine;
 	uint32_t m_Width, m_Height;
 	float m_AspectRatio;
-	std::unique_ptr<uint32_t[]> m_PixelData;
-	std::unique_ptr<glm::vec4[]> m_AccumulationBuffer;
 
 	std::weak_ptr<Scene> m_CurrentScene;
 
-	std::atomic<uint32_t> m_SampleCount = 0;
+	uint32_t m_SampleCount = 0;
 	uint32_t m_MaxRayBounces;
 	uint32_t m_MaxSamples;
-	bool m_AccumulationEnabled = true;
-
-	uint32_t m_ThreadCount;
-
-	uint32_t m_TilesX;
-	uint32_t m_TilesY;
-	uint32_t m_TotalTiles;
+	bool m_AccumulationEnabled = false;
+	bool m_DispatchCompute;
 };

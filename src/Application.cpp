@@ -1,6 +1,5 @@
-#include "Application.h"
+﻿#include "Application.h"
 
-#include "imgui_internal.h"
 
 
 namespace
@@ -43,147 +42,184 @@ void Application::Run()
 
 		glfwPollEvents();
 
+		HandleCursorInput();
+
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 		ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-		HandleCursorInput();
-		
-		
-		bool sceneChanged = false;
-		if (!m_Scenes.empty())
-		{
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
-			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetColorU32(ImVec4(0.10f, 0.10f, 0.12f, 1.0f)));
 
-			ImGui::Begin("Scene selection");
-
-			ImGui::BeginChild("##ScenesList", ImVec2(0, 200), true, ImGuiWindowFlags_NoNavFocus);
-
-			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.25f, 0.30f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.30f, 0.35f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.35f, 0.40f, 1.0f));
-
-			for (const auto& [name, scenePtr] : m_Scenes)
-			{
-				bool isCurrent = (name == m_CurrentSceneName);
-				if (ImGui::Selectable(name.c_str(), isCurrent, ImGuiSelectableFlags_SpanAllColumns))
-				{
-					m_CurrentSceneName = name;
-					m_CurrentScene = scenePtr;
-					m_Renderer->SetScene(scenePtr);
-					m_Renderer->ResetAccumulation();
-				}
-			}
-
-			ImGui::PopStyleColor(3);
-			ImGui::EndChild();
-			ImGui::End();
-
-			ImGui::PopStyleColor();
-			ImGui::PopStyleVar(2);
-		}
-
-		
-		if (m_CurrentScene)
-		{
-
-			Camera& camera = m_CurrentScene->GetActiveCamera();
-
-			HandleCameraRotate(camera);
-			HandleKeyboardInput(camera);
-
-			ImGui::Begin("Scene Components");
-
-			for (size_t i = 0; i < m_CurrentScene->GetSpheres().size(); i++)
-			{
-				Sphere& sphere = m_CurrentScene->GetSpheres()[i];
-				Material& material = m_CurrentScene->GetMaterials()[sphere.GetMaterialIndex()];
-
-				ImGui::PushID(static_cast<int>(i));
-
-				if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
-					sceneChanged = true;
-				if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
-					sceneChanged = true;
-				if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color)))
-					sceneChanged = true;
-				if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
-					sceneChanged = true;
-
-				if (material.IsEmissive())
-				{
-					if (ImGui::ColorEdit3("Emission Color", glm::value_ptr(material.EmissionColor)))
-						sceneChanged = true;
-					if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
-						sceneChanged = true;
-				}
-
-				ImGui::Separator();
-				ImGui::PopID();
-			}
-			ImGui::End();
-
-
-			ImGui::Begin("Information");
-			ImGui::Text("Rendering took: %.3fms", m_LastFrameRenderTime);
-
-			ImGui::Separator();
-			ImGui::Text("Accumulation Settings");
-
-			bool accumulationEnabled = m_Renderer->IsAccumulationEnabled();
-			if (ImGui::Checkbox("Enable Accumulation", &accumulationEnabled))
-			{
-				m_Renderer->SetAccumulation(accumulationEnabled);
-				if (!accumulationEnabled)
-				{
-					m_Renderer->ResetAccumulation();
-				}
-			}
-
-			ImGui::InputScalar("Amount of samples", ImGuiDataType_U32, &m_Renderer->GetMaxSamples());
-			ImGui::InputScalar("Maximum ray bounces", ImGuiDataType_U32, &m_Renderer->GetMaxRayBounces());
-
-			if (accumulationEnabled)
-			{
-				if (ImGui::Button("Reset Accumulation"))
-				{
-					m_Renderer->ResetAccumulation();
-				}
-
-				if (m_Renderer->IsComplete())
-				{
-					ImGui::TextColored(ImVec4(0, 1, 0, 1), "Rendering Complete!");
-				}
-			}
-			else
-			{
-				ImGui::TextColored(ImVec4(1, 1, 0, 1), "Real-time Mode");
-			}
-
-			ImGui::End();
-		}
-
+		DrawImGui();
 		ImGui::Render();
+
+		m_Renderer->Render();
+	}
+}
+
+void Application::DrawImGui()
+{
+	if (!m_Scenes.empty())
+	{
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetColorU32(ImVec4(0.10f, 0.10f, 0.12f, 1.0f)));
+
+		ImGui::Begin("Scene selection");
+
+		ImGui::BeginChild("##ScenesList", ImVec2(0, 200), true, ImGuiWindowFlags_NoNavFocus);
+
+		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.25f, 0.30f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.30f, 0.35f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.35f, 0.40f, 1.0f));
+
+		for (const auto& [name, scenePtr] : m_Scenes)
+		{
+			bool isCurrent = (name == m_CurrentSceneName);
+			if (ImGui::Selectable(name.c_str(), isCurrent, ImGuiSelectableFlags_SpanAllColumns))
+			{
+				m_CurrentSceneName = name;
+				m_CurrentScene = scenePtr;
+				m_Renderer->SetScene(scenePtr);
+				m_Renderer->ResetAccumulation();
+			}
+		}
+
+		ImGui::PopStyleColor(3);
+		ImGui::EndChild();
+		ImGui::End();
+
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar(2);
+	}
+
+	bool sceneChanged = false;
+	if (m_CurrentScene)
+	{
+
+		Camera& camera = m_CurrentScene->GetActiveCamera();
+
+		HandleCameraRotate(camera);
+		HandleKeyboardInput(camera);
+
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+		ImGui::Begin("Viewport", nullptr,
+			ImGuiWindowFlags_NoScrollbar |
+			ImGuiWindowFlags_NoScrollWithMouse);
+
+		const ImTextureID renderTexture = m_Renderer->GetRenderTextureID();
+
+		m_ViewportHovered = ImGui::IsWindowHovered();
+
+		ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+
+		if (viewportSize.x > 0 && viewportSize.y > 0)
+		{
+			uint32_t newWidth = static_cast<uint32_t>(viewportSize.x);
+			uint32_t newHeight = static_cast<uint32_t>(viewportSize.y);
+
+			if (newWidth != m_ViewportWidth || newHeight != m_ViewportHeight)
+			{
+				m_ViewportWidth = newWidth;
+				m_ViewportHeight = newHeight;
+				m_Renderer->ResizeViewport(m_ViewportWidth, m_ViewportHeight);
+			}
+		}
+
+		if (renderTexture)
+			ImGui::Image(renderTexture, viewportSize);
+
+		ImGui::End();
+		ImGui::PopStyleVar(2);
+
+		ImGui::Begin("Scene objects");
+		
+		for (size_t i = 0; i < m_CurrentScene->GetSpheres().size(); i++)
+		{
+			Sphere& sphere = m_CurrentScene->GetSpheres()[i];
+
+			if(ImGui::Selectable(sphere.GetName().c_str(), false))
+			{
+				m_SelectedSphereIndex = static_cast<int>(i);
+			}
+
+		}
+		ImGui::End();
+
+		ImGui::Begin("Object details");
+
+		if (m_SelectedSphereIndex != -1 && !m_CurrentScene->GetSpheres().empty())
+		{
+			Sphere& sphere = m_CurrentScene->GetSpheres()[m_SelectedSphereIndex];
+			Material& material = m_CurrentScene->GetMaterials()[sphere.GetMaterialIndex()];
+
+
+			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
+				sceneChanged = true;
+			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color)))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
+				sceneChanged = true;
+
+			if (material.IsEmissive())
+			{
+				if (ImGui::ColorEdit3("Emission Color", glm::value_ptr(material.EmissionColor)))
+					sceneChanged = true;
+				if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
+					sceneChanged = true;
+			}
+		}
+
+		ImGui::End();
+
+
+		ImGui::Begin("Information");
+		ImGui::Text("Rendering the image took: %.3fms", m_Renderer->GetRenderTime().RayTracingTime);
+		ImGui::Text("Rendering the screen took: %.3fms", m_Renderer->GetRenderTime().FullScreenTime);
+
+		ImGui::Separator();
+		ImGui::Text("Render Settings");
+
+		bool accumulationEnabled = m_Renderer->IsAccumulationEnabled();
+		if (ImGui::Checkbox("Start Rendering", &accumulationEnabled))
+		{
+			m_Renderer->SetAccumulation(accumulationEnabled);
+			if (!accumulationEnabled)
+			{
+				m_Renderer->ResetAccumulation();
+			}
+		}
+
+		ImGui::InputScalar("Amount of samples", ImGuiDataType_U32, &m_Renderer->GetMaxSamples());
+		ImGui::InputScalar("Maximum ray bounces", ImGuiDataType_U32, &m_Renderer->GetMaxRayBounces());
+
+		if (accumulationEnabled)
+		{
+			if (ImGui::Button("Reset Accumulation"))
+			{
+				m_Renderer->ResetAccumulation();
+			}
+
+			if (m_Renderer->IsComplete())
+			{
+				ImGui::TextColored(ImVec4(0, 1, 0, 1), "Rendering Complete!");
+			}
+		}
+		else
+		{
+			ImGui::TextColored(ImVec4(1, 1, 0, 1), "Real-time Mode");
+		}
+
+		ImGui::End();
 
 		if (sceneChanged && m_Renderer->IsAccumulationEnabled())
 		{
 			m_Renderer->ResetAccumulation();
 		}
-
-		Render();
 	}
-}
-
-void Application::Render()
-{
-	auto startTime = std::chrono::high_resolution_clock::now();
-	m_Renderer->Render();
-	auto endTime = std::chrono::high_resolution_clock::now();
-
-	std::chrono::duration<float, std::milli> duration = endTime - startTime;
-	m_LastFrameRenderTime = duration.count();
 }
 
 void Application::HandleKeyboardInput(Camera& camera)
@@ -215,6 +251,18 @@ void Application::HandleKeyboardInput(Camera& camera)
 		m_EPressed = false;
 	}
 
+	if (glfwGetKey(m_Window.get(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS &&
+		glfwGetKey(m_Window.get(), GLFW_KEY_R) == GLFW_PRESS &&
+		!m_ShaderReloadRequested)
+	{
+		m_ShaderReloadRequested = true;
+		m_Renderer->ReloadShaders();
+	}
+	else
+	{
+		m_ShaderReloadRequested = false;
+	}
+
 	glm::vec3 movement(0.0f);
 	if (glfwGetKey(m_Window.get(), GLFW_KEY_W) == GLFW_PRESS)
 		movement -= camera.GetDirection();
@@ -224,7 +272,6 @@ void Application::HandleKeyboardInput(Camera& camera)
 		movement -= camera.GetRight();
 	if (glfwGetKey(m_Window.get(), GLFW_KEY_D) == GLFW_PRESS)
 		movement += camera.GetRight();
-
 
 	if (glm::length(movement) > 0.0f)
 	{
@@ -245,7 +292,8 @@ void Application::HandleCameraRotate(Camera& camera)
 	double xpos, ypos;
 	glfwGetCursorPos(m_Window.get(), &xpos, &ypos);
 
-	if (m_FirstMouse) {
+	if (m_FirstMouse) 
+	{
 		m_LastMouseX = xpos;
 		m_LastMouseY = ypos;
 		m_FirstMouse = false;
@@ -254,8 +302,8 @@ void Application::HandleCameraRotate(Camera& camera)
 
 	if (m_LastMouseX != xpos && m_LastMouseY != ypos)
 	{
-		double xOffset = m_LastMouseX - xpos;
-		double yOffset = m_LastMouseY - ypos;
+		const double xOffset = m_LastMouseX - xpos;
+		const double yOffset = m_LastMouseY - ypos;
 		m_LastMouseX = xpos;
 		m_LastMouseY = ypos;
 
@@ -264,8 +312,6 @@ void Application::HandleCameraRotate(Camera& camera)
 		if (m_Renderer->IsAccumulationEnabled())
 			m_Renderer->ResetAccumulation();
 	}
-
-	
 }
 
 void Application::HandleCursorInput()
@@ -281,16 +327,24 @@ void Application::HandleCursorInput()
 		m_EscapePressed = false;
 	}
 
-	if (glfwGetMouseButton(m_Window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !m_LeftClickPressed && !ImGui::GetIO().WantCaptureMouse)
+	static bool viewportHovered = false;
+
+	if (glfwGetMouseButton(m_Window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !m_LeftClickPressed)
 	{
-		m_CursorVisible = false;
-		glfwSetInputMode(m_Window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		if (viewportHovered)
+		{
+			m_CursorVisible = false;
+			glfwSetInputMode(m_Window.get(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			m_FirstMouse = true;
+		}
 		m_LeftClickPressed = true;
 	}
 	else if (glfwGetMouseButton(m_Window.get(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE)
 	{
 		m_LeftClickPressed = false;
 	}
+
+	viewportHovered = m_ViewportHovered;
 }
 
 void Application::Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized)
@@ -319,7 +373,7 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 			{
 				app->m_Width = width;
 				app->m_Height = height;
-				app->m_Renderer->Resize(width, height);
+				app->m_Renderer->OnWindowResize(width, height);
 			}
 		});
 
@@ -432,11 +486,12 @@ void Application::LoadJSONScenes()
 					scene.GetSpheres().reserve(spheresJson.size());
 					for (const auto& jsonSphere : spheresJson)
 					{
+						const std::string& name = jsonSphere["Name"];
 						const glm::vec3 position = { jsonSphere["Position"][0], jsonSphere["Position"][1], jsonSphere["Position"][2]};
 						const float radius = jsonSphere["Radius"];
 						const uint32_t materialIndex = jsonSphere["MaterialIndex"];
 
-						scene.GetSpheres().emplace_back(position, radius, materialIndex);
+						scene.GetSpheres().emplace_back(name, position, radius, materialIndex);
 					}
 				}
 
@@ -493,6 +548,8 @@ void Application::SaveJSONScenes()
 		{
 			json sphereJson;
 			glm::vec3 pos = sphere.GetPosition();
+
+			sphereJson["Name"] = sphere.GetName();
 			sphereJson["Position"] = { pos.x, pos.y, pos.z };
 			sphereJson["Radius"] = sphere.GetRadius();
 			sphereJson["MaterialIndex"] = sphere.GetMaterialIndex();

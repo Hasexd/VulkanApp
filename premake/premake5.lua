@@ -5,9 +5,7 @@ workspace "VulkanRayTracer"
     startproject "VulkanRayTracer"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
-vulkan = os.getenv("VULKAN_SDK")
 
--- GLFW Vendor
 project "GLFW"
     location "vendor/glfw"
     kind "StaticLib"
@@ -17,27 +15,17 @@ project "GLFW"
     targetdir ("bin/target/" .. outputdir .. "/%{prj.name}")
     objdir ("bin/obj/" .. outputdir .. "/%{prj.name}")
 
-    filter "system:linux"
-    	pic "On"
+    files {
+        "vendor/glfw/include/GLFW/**.h",
+        "vendor/glfw/src/**.c"
+    }
+
+    filter "system:windows"
         systemversion "latest"
 
-    files {
-            "vendor/glfw/src/**.c"
-        }
-
         defines { 
-            "_GLFW_X11",
+            "_GLFW_WIN32",
             "_CRT_SECURE_NO_WARNINGS"
-        }
-        
-        links {
-            "dl",
-            "pthread",
-            "X11",
-            "Xrandr",
-            "Xinerama",
-            "Xcursor",
-            "Xext"
         }
 
     filter "configurations:Debug"
@@ -49,7 +37,6 @@ project "GLFW"
         optimize "on"
 
 
--- vk-bootstrap Vendor
 project "vk-bootstrap"
     location "vendor/vk-bootstrap"
     kind "StaticLib"
@@ -66,7 +53,7 @@ project "vk-bootstrap"
     }
     includedirs{
         "vendor/vk-bootstrap/include",
-        vulkan .. "/include"
+        "$(VULKAN_SDK)/Include"
     }
 
     filter "configurations:Debug"
@@ -92,7 +79,7 @@ project "ImGui"
 
     includedirs{
         "vendor/glfw/include",
-        vulkan .. "/include"
+        "$(VULKAN_SDK)/Include"
     }
 
     filter "configurations:Debug"
@@ -104,7 +91,6 @@ project "ImGui"
         optimize "on"
 
 
--- Main Project
 project "VulkanRayTracer"
     location "src"
     kind "ConsoleApp"
@@ -119,7 +105,11 @@ project "VulkanRayTracer"
         "src/**.h",
         "src/**.cpp",
         "src/Vulkan/**.cpp",
-        "src/Vulkan/**.h"
+        "src/Vulkan/**.h",
+        "shaders/**.comp",
+        "shaders/**.vert",
+        "shaders/**.frag",
+        "scenes/**.json"
     }
 
     includedirs {
@@ -128,7 +118,7 @@ project "VulkanRayTracer"
         "vendor/vk-bootstrap/include",
         "vendor/VulkanMemoryAllocator/include",
         "vendor/imgui",
-        vulkan .. "/include",
+        "$(VULKAN_SDK)/Include",
         "src/Vulkan",
         "vendor/json/single_include"
 
@@ -140,14 +130,40 @@ project "VulkanRayTracer"
         "vk-bootstrap"
     }
 
-    filter "system:linux"
-        systemversion "latest"
-        links { "vulkan" } -- Link Vulkan SDK library
+     vpaths {
+     {["_Vulkan"]  = { "src/Vulkan/**" }},
+     {["_Shaders"] = { "shaders/**.comp", "shaders/**.vert", "shaders/**.frag" }},
+     {["_Scenes"] = { "scenes/**.json" }},
+     {["Header Files"] = { "src/**.h" }} ,
+     {["Source Files"] = { "src/**.cpp" }},
+    }
 
+    
+    filter "files:shaders/*.comp"
+        buildmessage 'Compiling shader: %{file.basename}'
+        buildcommands {
+            'glslang -V "%{file.abspath}" -o "%{wks.location}/shaders/compiled/%{file.basename}.spv"'
+        }
+        buildoutputs {
+            "%{wks.location}/shaders/compiled/%{file.basename}.spv"
+        }
+    filter {}
+
+    filter { "system:windows" }
+        systemversion "latest"
+        links { "$(VULKAN_SDK)/Lib/vulkan-1" }
+    filter {}
+
+    filter {"system:linux"}
+        links { "vulkan" }
+    filter {}
+       
     filter "configurations:Debug"
         runtime "Debug"
         symbols "on"
+    filter {}
 
     filter "configurations:Release"
         runtime "Release"
         optimize "on"
+    filter {}

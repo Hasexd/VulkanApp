@@ -45,7 +45,8 @@ bin/
 .idea/
 .vscode/
 
-
+shaders/compiled/*
+!shaders/compiled/.gitkeep
 
 
 

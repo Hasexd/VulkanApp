@@ -25,7 +25,6 @@ public:
 
 	void Run();
 private:
-	void Render();
 	void Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized);
 
 	void HandleCameraRotate(Camera& camera);
@@ -35,6 +34,7 @@ private:
 	void LoadJSONScenes();
 	void SaveJSONScenes();
 
+	void DrawImGui();
 private:
 	uint32_t m_Width, m_Height;
 
@@ -43,7 +43,6 @@ private:
 	std::shared_ptr<GLFWwindow> m_Window;
 	std::unique_ptr<Renderer> m_Renderer;
 
-	float m_LastFrameRenderTime;
 	double m_DeltaTime;
 
 	double m_LastMouseX = 0.f;
@@ -54,10 +53,17 @@ private:
 	bool m_LeftClickPressed = false;
 	bool m_QPressed = false;
 	bool m_EPressed = false;
+	bool m_ViewportHovered = false;
+	bool m_ShaderReloadRequested = false;
+
+	uint32_t m_ViewportWidth;
+	uint32_t m_ViewportHeight;
 
 	std::unordered_map<std::string, std::shared_ptr<Scene>> m_Scenes;
 	std::unordered_map<std::string, std::string> m_SceneFilePaths;
 
 	std::shared_ptr<Scene> m_CurrentScene;
 	std::string m_CurrentSceneName;
+
+	int m_SelectedSphereIndex = -1;
 };

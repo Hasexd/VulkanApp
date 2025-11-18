@@ -1,67 +1,13 @@
 #include "Renderer.h"
 
-namespace 
-{
-	uint32_t ConvertToRGBA(const glm::vec4 color)
-	{
-		uint8_t r = (uint8_t)(color.r * 255.f);
-		uint8_t g = (uint8_t)(color.g * 255.f);
-		uint8_t b = (uint8_t)(color.b * 255.f);
-		uint8_t a = (uint8_t)(color.a * 255.f);
-
-
-		return (a << 24) | (b << 16) | (g << 8) | r;
-	}
-
-	uint32_t PcgHash(uint32_t input)
-	{
-		uint32_t state = input * 747796405u + 2891336453u;
-		uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-
-		return (word >> 22u) ^ word;
-	}
-
-	float RandomFloat(uint32_t& seed)
-	{
-		seed = PcgHash(seed);
-		return static_cast<float>(seed) / static_cast<float>(std::numeric_limits<uint32_t>::max());
-	}
-
-	glm::vec3 RandomCosineWeightedHemisphere(const glm::vec3& normal, uint32_t& seed)
-	{
-
-		float r1 = RandomFloat(seed);
-		float r2 = RandomFloat(seed);
-
-		float cosTheta = std::sqrt(r1);
-		float sinTheta = std::sqrt(1.0f - r1);
-		float phi = 2.0f * M_PI * r2;
-
-		glm::vec3 w = normal;
-		glm::vec3 u = glm::normalize(glm::cross((std::abs(w.x) > 0.1f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0)), w));
-		glm::vec3 v = glm::cross(w, u);
-
-		return cosTheta * w + sinTheta * std::cos(phi) * u + sinTheta * std::sin(phi) * v;
-	}
-	constexpr glm::vec3 c_BackgroundColor = { 0.1f, 0.2f, 0.4f };
-	constexpr float c_Epsilon = 0.0001f;
-	constexpr uint32_t c_TileSize = 64;
-}
-
 
 Renderer::Renderer(const std::shared_ptr<GLFWwindow>& window, uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height),
-	m_PixelData(std::make_unique<uint32_t[]>(m_Width * m_Height)),
-	m_AccumulationBuffer(std::make_unique<glm::vec4[]>(m_Width * m_Height)),
-	m_MaxSamples(250), m_MaxRayBounces(10), m_ThreadCount(std::thread::hardware_concurrency()),
-	m_TilesX((m_Width + c_TileSize - 1) / c_TileSize), m_TilesY((m_Height + c_TileSize - 1) / c_TileSize), m_TotalTiles(m_TilesX + m_TilesY)
+	m_MaxSamples(250), m_MaxRayBounces(10)
 {
-	if (m_ThreadCount == 0)
-		m_ThreadCount = 4;
 
 	m_Engine = std::make_unique<VulkanEngine>();
-	m_Engine->SetWindow(window);
-	m_Engine->Init();
+	m_Engine->Init(window);
 }
 
 Renderer::~Renderer()
@@ -73,207 +19,129 @@ Renderer::~Renderer()
 }
 
 
-void Renderer::Resize(uint32_t width, uint32_t height)
+void Renderer::OnWindowResize(uint32_t width, uint32_t height) const
 {
-
-	m_Width = width;
-	m_Height = height;
-	m_AspectRatio = static_cast<float>(m_Width) / m_Height;
-
-	m_PixelData.reset(new uint32_t[width * height]);
-	m_AccumulationBuffer.reset(new glm::vec4[width * height]);
-	m_SampleCount = 0;
-
-	m_TilesX = (m_Width + c_TileSize - 1) / c_TileSize;
-	m_TilesY = (m_Height + c_TileSize - 1) / c_TileSize;
-	m_TotalTiles = m_TilesX + m_TilesY;
-
 	m_Engine->OnWindowResize(width, height);
 }
 
+void Renderer::ResizeViewport(uint32_t width, uint32_t height)
+{
+	if (width == 0 || height == 0)
+		return;
+
+	m_Width = width;
+	m_Height = height;
+
+	m_AspectRatio = static_cast<float>(m_Width) / m_Height;
+	m_SampleCount = 1;
+
+	m_Engine->SetViewportSize(width, height);
+}
 
 void Renderer::Render()
 {
-	if (const auto& scene = m_CurrentScene.lock(); scene && !IsComplete())
+
+	if(const auto& scene = m_CurrentScene.lock(); m_DispatchCompute = scene && !IsComplete())
 	{
+		UpdateUniformBuffer(scene);
+		UpdateSphereBuffer(scene);
+		UpdateMaterialBuffer(scene);
+
 		if (m_AccumulationEnabled)
 			++m_SampleCount;
-
-		AsyncTileBasedRendering(scene);
+		else
+			m_SampleCount = 1;
 	}
 
-	m_Engine->DrawFrame(m_PixelData.get());
-	
+	m_Engine->DrawFrame(m_DispatchCompute);
 }
 
-
-void Renderer::AsyncTileBasedRendering(const std::shared_ptr<Scene>& scene)
+void Renderer::UpdateUniformBuffer(const std::shared_ptr<Scene>& scene) const
 {
-
-	std::vector<std::future<void>> futures;
-	futures.reserve(m_TotalTiles);
-
-	uint32_t currentSample = m_SampleCount;
-
-	for (uint32_t tileY = 0; tileY < m_TilesY; tileY++)
-	{
-		for (uint32_t tileX = 0; tileX < m_TilesX; tileX++)
-		{
-			futures.emplace_back(std::async(std::launch::async, [this, scene, currentSample, tileX, tileY]()
-				{
-					const uint32_t startX = tileX * c_TileSize;
-					const uint32_t startY = tileY * c_TileSize;
-					const uint32_t endX = std::min(startX + c_TileSize, m_Width);
-					const uint32_t endY = std::min(startY + c_TileSize, m_Height);
-
-					for (uint32_t y = startY; y < endY; y++)
-					{
-						for (uint32_t x = startX; x < endX; x++)
-						{
-							glm::vec2 coord = { static_cast<float>(x) / m_Width, static_cast<float>(y) / m_Height };
-							coord = coord * 2.f - 1.f;
-							coord.y = -coord.y;
-
-							glm::vec4 color = RayGen(coord, currentSample, scene);
-							color = glm::clamp(color, glm::vec4(0.f), glm::vec4(1.f));
-
-							size_t idx = x + y * m_Width;
-
-							if (m_AccumulationEnabled)
-							{
-								m_AccumulationBuffer[idx] += color;
-								glm::vec4 avg = m_AccumulationBuffer[idx] / static_cast<float>(m_SampleCount);
-
-								m_PixelData[idx] = ConvertToRGBA(avg);
-							}
-							else
-							{
-								m_PixelData[idx] = ConvertToRGBA(color);
-							}
-						}
-					}
-				}));
-		}
-	}
-
-	for (auto& future : futures)
-	{
-		future.wait();
-	}
-}
-
-
-glm::vec4 Renderer::RayGen(const glm::vec2& coord, uint32_t sampleCount, const std::shared_ptr<Scene>& scene) const
-{
+	if (!scene) 
+		return;
 
 	const Camera& camera = scene->GetActiveCamera();
+	UniformBufferData ubo = {};
 
-	const float scalar = glm::tan(glm::radians(camera.GetFieldOfView()) / 2);
+	ubo.CameraPosition = camera.GetPosition();
+	ubo.CameraFrontVector = camera.GetDirection();
+	ubo.CameraUpVector = camera.GetUp();
+	ubo.CameraRightVector = camera.GetRight();
+	ubo.AspectRatio = m_AspectRatio;
+	ubo.FieldOfView = camera.GetFieldOfView();
+	ubo.SampleCount = m_SampleCount;
+	ubo.MaxBounces = m_MaxRayBounces;
+	ubo.BackgroundColor = {0.2, 0.4, 0.6};
+	ubo.Width = m_Width;
+	ubo.Height = m_Height;
+	ubo.AccumulationEnabled = m_AccumulationEnabled;
 
-	glm::vec3 rayDirection(
-		coord.x * m_AspectRatio * scalar,
-		coord.y * scalar,
-		-1.0f
-	);
+	void* data;
+	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->UniformBuffer.Allocation, &data);
+	memcpy(data, &ubo, sizeof(ubo));
+	vmaUnmapMemory(m_Engine->GetAllocator(), m_Engine->UniformBuffer.Allocation);
+}
 
-	rayDirection = glm::normalize(
-		rayDirection.x * camera.GetRight() +
-		rayDirection.y * camera.GetUp() +
-		rayDirection.z * camera.GetDirection()
-	);
+void Renderer::UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const
+{
+	if (!scene) 
+		return;
 
-	Ray ray(camera.GetPosition(), rayDirection);
+	const auto& spheres = scene->GetSpheres();
+	std::vector<SphereBufferData> gpuSpheres;
+	gpuSpheres.reserve(spheres.size());
 
-	glm::vec3 light(0.f);
-	glm::vec3 throughput(1.f);
-
-	uint32_t seed = static_cast<uint32_t>(coord.x * 1000000.0f) +
-		static_cast<uint32_t>(coord.y * 1000000.0f) * m_Width +
-		sampleCount * 982451653u;
-
-	for (size_t i = 0; i < m_MaxRayBounces; i++)
+	for (const auto& sphere : spheres) 
 	{
-		const HitPayload& hit = TraceRay(ray, scene);
-
-		if (hit.HitDistance > 0.f)
-		{
-			const Material& material = scene->GetMaterials()[scene->GetSpheres()[hit.ObjectIndex].GetMaterialIndex()];
-
-			light += material.EmissionColor * material.EmissionPower;
-			throughput *= material.Color;
-
-
-			ray.Origin = hit.WorldPosition + hit.WorldNormal * c_Epsilon;
-			ray.Direction = RandomCosineWeightedHemisphere(hit.WorldNormal, seed);
-		}
-		else
-		{
-			//light += c_BackgroundColor * throughput;
-			break;
-		}
+		SphereBufferData sd = {};
+		sd.Position = sphere.GetPosition();
+		sd.Radius = sphere.GetRadius();
+		sd.MaterialIndex = sphere.GetMaterialIndex();
+		gpuSpheres.push_back(sd);
 	}
 
-	return {light, 1.f};
+
+	void* data;
+	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->SphereBuffer.Allocation, &data);
+	memcpy(data, gpuSpheres.data(), gpuSpheres.size() * sizeof(SphereBufferData));
+	vmaUnmapMemory(m_Engine->GetAllocator(), m_Engine->SphereBuffer.Allocation);
 }
 
-HitPayload Renderer::TraceRay(const Ray& ray, const std::shared_ptr<Scene>& scene)
+void Renderer::UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const
 {
-	uint32_t closestSphereIndex = std::numeric_limits<uint32_t>::max();
-	float closestDistance = std::numeric_limits<float>::max();
+	if (!scene)
+		return;
 
-	glm::vec3 hitNear{}, hitFar{};
+	const auto& materials = scene->GetMaterials();
+	std::vector<MaterialBufferData> gpuMaterials;
+	gpuMaterials.reserve(materials.size());
 
-	for (size_t i = 0; i < scene->GetSpheres().size(); i++)
+	for (const auto& material : materials) 
 	{
-		if (scene->GetSpheres()[i].Intersects(ray, hitNear, hitFar))
-		{
-			const float distanceToNear = glm::dot(hitNear - ray.Origin, ray.Direction);
-			const float distanceToFar = glm::dot(hitFar - ray.Origin, ray.Direction);
-
-			if (distanceToNear > 0.f && closestDistance > distanceToNear)
-			{
-				closestSphereIndex = i;
-				closestDistance = distanceToNear;
-			}
-			else if (distanceToFar > 0.f && closestDistance > distanceToFar)
-			{
-				closestSphereIndex = i;
-				closestDistance = distanceToFar;
-			}
-		}
+		MaterialBufferData md = {};
+		md.Color = material.Color;
+		md.Roughness = material.Roughness;
+		md.Metallic = material.Metallic;
+		md.EmissionPower = material.EmissionPower;
+		md.EmissionColor = material.EmissionColor;
+		gpuMaterials.push_back(md);
 	}
 
-	if (closestSphereIndex < std::numeric_limits<uint32_t>::max())
-	{
-		return ClosestHit(ray, closestDistance, closestSphereIndex, scene);
-	}
-
-	return Miss(ray);
+	void* data;
+	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->MaterialBuffer.Allocation, &data);
+	memcpy(data, gpuMaterials.data(), gpuMaterials.size() * sizeof(MaterialBufferData));
+	vmaUnmapMemory(m_Engine->GetAllocator(), m_Engine->MaterialBuffer.Allocation);
 }
 
-HitPayload Renderer::ClosestHit(const Ray& ray, float hitDistance, uint32_t objectIndex, const std::shared_ptr<Scene>& scene)
+void Renderer::ReloadShaders()
 {
-	HitPayload hit{};
-
-	hit.HitDistance = hitDistance;
-	hit.ObjectIndex = objectIndex;
-	hit.WorldPosition = ray.Origin + ray.Direction * hitDistance;
-	hit.WorldNormal = glm::normalize(hit.WorldPosition - scene->GetSpheres()[objectIndex].GetPosition());
-
-	return hit;
+	m_Engine->ReloadShaders();
+	ResetAccumulation();
 }
-
-HitPayload Renderer::Miss(const Ray& ray)
-{
-	HitPayload hit{};
-	hit.HitDistance = -1.f;
-
-	return hit;
-}
-
 
 void Renderer::ResetAccumulation()
 {
-	std::fill_n(m_AccumulationBuffer.get(), m_Width * m_Height, glm::vec4(0.0f));
-	m_SampleCount = 0;
+	m_SampleCount = 1;
+	m_Engine->ResetAccumulation();
 }
