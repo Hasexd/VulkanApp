@@ -71,11 +71,10 @@ namespace
 		const std::string fileName = path.stem().string();
 		const std::filesystem::path pathToCompiled = path.parent_path() / "compiled";
 
-		std::string command = std::format("glslang -V {} -o {}/{}.spv",
+		std::string command = std::format("glslang -V \"{}\" -o \"{}/{}.spv\"",
 			path.string(), pathToCompiled.string(), fileName);
 
 		std::println("Compiling: {}", command);
-
 		return std::system(command.c_str()) == 0;
 	}
 }
