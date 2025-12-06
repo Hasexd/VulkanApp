@@ -1,6 +1,15 @@
 #version 450
 
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba16) uniform image2D HDRImage;
+
 void main()
 {
+	ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    vec2 imageSize = vec2(imageSize(HDRImage));
+    vec2 coord = (vec2(pixelCoord) / imageSize) * 2.0 - 1.0;
+    coord.y = -coord.y;
 
+    imageStore(HDRImage, pixelCoord, vec4(1.0, 0.0, 0.0, 1.0));
 }

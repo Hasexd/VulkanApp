@@ -12,7 +12,8 @@ enum class ShaderName : uint8_t
 {
 	NONE,
 	RAY_TRACING,
-	BLOOM
+	BLOOM,
+	TONE_MAPPING
 };
 
 struct DeletionQueue
@@ -92,7 +93,6 @@ struct MaterialBufferData
 	float Roughness;
 	float Metallic;
 	float EmissionPower;
-	alignas(16) glm::vec3 EmissionColor;
 };
 
 struct RenderTime

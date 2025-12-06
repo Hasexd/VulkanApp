@@ -49,8 +49,6 @@ void Renderer::Render()
 
 		if (m_AccumulationEnabled)
 			++m_SampleCount;
-		else
-			m_SampleCount = 1;
 	}
 
 	m_Engine->DrawFrame(m_DispatchCompute);
@@ -72,7 +70,7 @@ void Renderer::UpdateUniformBuffer(const std::shared_ptr<Scene>& scene) const
 	ubo.FieldOfView = camera.GetFieldOfView();
 	ubo.SampleCount = m_SampleCount;
 	ubo.MaxBounces = m_MaxRayBounces;
-	ubo.BackgroundColor = {0.2, 0.4, 0.6};
+	ubo.BackgroundColor = m_BackgroundColor;
 	ubo.Width = m_Width;
 	ubo.Height = m_Height;
 	ubo.AccumulationEnabled = m_AccumulationEnabled;
@@ -124,7 +122,6 @@ void Renderer::UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const
 		md.Roughness = material.Roughness;
 		md.Metallic = material.Metallic;
 		md.EmissionPower = material.EmissionPower;
-		md.EmissionColor = material.EmissionColor;
 		gpuMaterials.push_back(md);
 	}
 

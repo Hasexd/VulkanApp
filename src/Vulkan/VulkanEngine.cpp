@@ -62,6 +62,8 @@ namespace
 			return ShaderName::RAY_TRACING;
 		if (string == "bloom" || string == "bloom.comp")
 			return ShaderName::BLOOM;
+		if(string == "tone_mapping" || string == "tone_mapping.comp")
+			return ShaderName::TONE_MAPPING;
 
 		return ShaderName::NONE;
 	}
@@ -231,30 +233,67 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 		{
 			TransitionImage(
 				cmd,
-				m_RenderImage.Image,
+				m_HDRImage.Image,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				VK_IMAGE_LAYOUT_GENERAL
 			);
+
+			TransitionImage(cmd, m_LDRImage.Image, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 		}
 
-		const Shader& shader = m_Shaders.at(ShaderName::RAY_TRACING);
+		const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
+		const Shader& bloomShader = m_Shaders.at(ShaderName::BLOOM);
+		const Shader& toneMappingShader = m_Shaders.at(ShaderName::TONE_MAPPING);
+
 		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 0);
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, shader.Pipeline);
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, rtShader.Pipeline);
 		vkCmdBindDescriptorSets(
 			cmd,
 			VK_PIPELINE_BIND_POINT_COMPUTE,
-			shader.PipelineLayout,
-			0, 1, &shader.DescriptorSet,
+			rtShader.PipelineLayout,
+			0, 1, &rtShader.DescriptorSet,
 			0, nullptr
 		);
 		uint32_t gx = (m_ViewportWidth + 15) / 16;
 		uint32_t gy = (m_ViewportHeight + 15) / 16;
 		vkCmdDispatch(cmd, gx, gy, 1);
+
+		//vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+
+		/*vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, bloomShader.Pipeline);
+		vkCmdBindDescriptorSets(
+			cmd,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			bloomShader.PipelineLayout,
+			0, 1, &bloomShader.DescriptorSet,
+			0, nullptr
+		);
+		vkCmdDispatch(cmd, gx, gy, 1);*/
+
+		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, toneMappingShader.Pipeline);
+		vkCmdBindDescriptorSets(
+			cmd,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			toneMappingShader.PipelineLayout,
+			0, 1, &toneMappingShader.DescriptorSet,
+			0, nullptr
+		);
+		vkCmdDispatch(cmd, gx, gy, 1);
+
 		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 1);
 
 		TransitionImage(
 			cmd,
-			m_RenderImage.Image,
+			m_HDRImage.Image,
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		);
+
+		TransitionImage(
+			cmd,
+			m_LDRImage.Image,
 			VK_IMAGE_LAYOUT_GENERAL,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		);
@@ -317,29 +356,32 @@ void VulkanEngine::RecreateRenderTargets()
 {
 	vkDeviceWaitIdle(m_Device);
 
-	if (m_RenderImage.Image != VK_NULL_HANDLE)
-	{
-		vkDestroyImageView(m_Device, m_RenderImage.ImageView, nullptr);
-		DestroyImage(m_RenderImage);
-	}
+	vkDestroyImageView(m_Device, m_LDRImage.ImageView, nullptr);
+	DestroyImage(m_LDRImage);
 
-	if (m_AccumulationImage.Image != VK_NULL_HANDLE)
-	{
-		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
-		DestroyImage(m_AccumulationImage);
-	}
+	vkDestroyImageView(m_Device, m_HDRImage.ImageView, nullptr);
+	DestroyImage(m_HDRImage);
+
+	vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
+	DestroyImage(m_AccumulationImage);
 
 	InitRenderTargets();
 
-	if (m_Shaders.contains(ShaderName::RAY_TRACING))
-	{
-		Shader& shader = m_Shaders[ShaderName::RAY_TRACING];
+	Shader& rtShader = m_Shaders[ShaderName::RAY_TRACING];
+	Shader& bloomShader = m_Shaders[ShaderName::BLOOM];
+	Shader& toneMappingShader = m_Shaders[ShaderName::TONE_MAPPING];
 
-		shader.Bindings[0] = DescriptorBinding(m_RenderImage);
-		shader.Bindings[1] = DescriptorBinding(m_AccumulationImage);
+	rtShader.Bindings[0] = DescriptorBinding(m_HDRImage);
+	rtShader.Bindings[1] = DescriptorBinding(m_AccumulationImage);
 
-		UpdateDescriptorSets(shader);
-	}
+	bloomShader.Bindings[0] = DescriptorBinding(m_HDRImage);
+
+	toneMappingShader.Bindings[0] = DescriptorBinding(m_HDRImage);
+	toneMappingShader.Bindings[1] = DescriptorBinding(m_LDRImage);
+
+	UpdateDescriptorSets(rtShader);
+	UpdateDescriptorSets(bloomShader);
+	UpdateDescriptorSets(toneMappingShader);
 }
 
 void VulkanEngine::UpdateTimings()
@@ -406,7 +448,7 @@ void VulkanEngine::RecreateSwapchain(uint32_t width, uint32_t height)
 }
 
 void VulkanEngine::InitImGui()
-{
+{ 
 	VkDescriptorPoolSize poolSizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
 		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
 		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
@@ -470,15 +512,9 @@ void VulkanEngine::InitImGui()
 
 void VulkanEngine::InitShaders()
 {
-	std::unordered_map<VkDescriptorType, uint32_t> descriptorTypes = {
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 }
-	};
-
-	const std::vector rtBindings =
+	const std::vector<DescriptorBinding> rtBindings =
 	{
-		DescriptorBinding(m_RenderImage),
+		DescriptorBinding(m_HDRImage),
 		DescriptorBinding(m_AccumulationImage),
 		DescriptorBinding(UniformBuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER),
 		DescriptorBinding(SphereBuffer),
@@ -487,9 +523,28 @@ void VulkanEngine::InitShaders()
 
 	CreateShader(ShaderName::RAY_TRACING, rtBindings, "../shaders/compiled/ray_tracing.spv");
 
+	const std::vector<DescriptorBinding> bloomBindings =
+	{
+		DescriptorBinding(m_HDRImage)
+	};
+
+	CreateShader(ShaderName::BLOOM, bloomBindings, "../shaders/compiled/bloom.spv");
+
+	const std::vector<DescriptorBinding> toneMappingBindings =
+	{
+		DescriptorBinding(m_HDRImage),
+		DescriptorBinding(m_LDRImage)
+	};
+
+	CreateShader(ShaderName::TONE_MAPPING, toneMappingBindings, "../shaders/compiled/tone_mapping.spv");
+
 	const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
+	const Shader& bloomShader = m_Shaders.at(ShaderName::BLOOM);
+	const Shader& toneMappingShader = m_Shaders.at(ShaderName::TONE_MAPPING);
 
 	UpdateDescriptorSets(rtShader);
+	UpdateDescriptorSets(bloomShader);
+	UpdateDescriptorSets(toneMappingShader);
 }
 
 void VulkanEngine::CreateShader(const ShaderName& shaderName,
@@ -600,13 +655,7 @@ void VulkanEngine::CreateShader(const ShaderName& shaderName,
 
 	vkDestroyShaderModule(m_Device, computeShaderModule, nullptr);
 
-
 	m_Shaders[shaderName] = shader;
-
-	/*m_MainDeletionQueue.PushFunction([this, shader]() -> void
-	{
-		shader.Destroy(m_Device);
-	});*/
 }
 
 void VulkanEngine::UpdateDescriptorSets(const Shader& shader) const
@@ -666,24 +715,27 @@ void VulkanEngine::InitRenderTargets()
 		1
 	};
 
-	m_RenderImage = CreateImage(imageExtent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
+	m_LDRImage = CreateImage(imageExtent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
 
-	if (m_RenderImage.ImageView == VK_NULL_HANDLE)
+	if (m_LDRImage.ImageView == VK_NULL_HANDLE)
 	{
-		CreateImageView(m_RenderImage, m_RenderImage.ImageFormat);
+		CreateImageView(m_LDRImage, m_LDRImage.ImageFormat);
 	}
 
-	TransitionImageLayout(m_RenderImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	TransitionImageLayout(m_LDRImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	const VkExtent3D accumExtent = 
+	m_HDRImage = CreateImage(imageExtent, VK_FORMAT_R16G16B16A16_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
+		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+
+	if (m_HDRImage.ImageView == VK_NULL_HANDLE)
 	{
-		.width = width,
-		.height = height,
-		.depth = 1
-	};
+		CreateImageView(m_HDRImage, m_HDRImage.ImageFormat);
+	}
 
-	m_AccumulationImage = CreateImage(accumExtent, VK_FORMAT_R32G32B32A32_SFLOAT,
+	TransitionImageLayout(m_HDRImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	m_AccumulationImage = CreateImage(imageExtent, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
 	if (m_AccumulationImage.ImageView == VK_NULL_HANDLE)
@@ -709,7 +761,7 @@ void VulkanEngine::InitRenderTargets()
 
 	m_RenderTextureData.SetTexID(reinterpret_cast<ImTextureID>(ImGui_ImplVulkan_AddTexture(
 		m_RenderSampler,
-		m_RenderImage.ImageView,
+		m_LDRImage.ImageView,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	)));
 }
@@ -1065,10 +1117,12 @@ void VulkanEngine::Cleanup()
 		vmaDestroyBuffer(m_Allocator, SphereBuffer.Buffer, SphereBuffer.Allocation);
 		vmaDestroyBuffer(m_Allocator, MaterialBuffer.Buffer, MaterialBuffer.Allocation);
 
-		DestroyImage(m_RenderImage);
+		DestroyImage(m_LDRImage);
+		DestroyImage(m_HDRImage);
 		DestroyImage(m_AccumulationImage);
 
-		vkDestroyImageView(m_Device, m_RenderImage.ImageView, nullptr);
+		vkDestroyImageView(m_Device, m_LDRImage.ImageView, nullptr);
+		vkDestroyImageView(m_Device, m_HDRImage.ImageView, nullptr);
 		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
 
 		m_MainDeletionQueue.Flush();

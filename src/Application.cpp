@@ -163,25 +163,21 @@ void Application::DrawImGui()
 				sceneChanged = true;
 			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
-
-			if (material.IsEmissive())
-			{
-				if (ImGui::ColorEdit3("Emission Color", glm::value_ptr(material.EmissionColor)))
-					sceneChanged = true;
-				if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
-					sceneChanged = true;
-			}
+			if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
+				sceneChanged = true;
 		}
 
 		ImGui::End();
 
 
 		ImGui::Begin("Information");
-		ImGui::Text("Rendering the image took: %.3fms", m_Renderer->GetRenderTime().RayTracingTime);
-		ImGui::Text("Rendering the screen took: %.3fms", m_Renderer->GetRenderTime().FullScreenTime);
+		ImGui::Text("Rendering the frame took: %.3fms", m_Renderer->GetRenderTime().RayTracingTime);
 
 		ImGui::Separator();
 		ImGui::Text("Render Settings");
+
+		if (ImGui::ColorEdit3("Background color", &m_Renderer->GetBgColorRef()[0]))
+			sceneChanged = true;
 
 		bool accumulationEnabled = m_Renderer->IsAccumulationEnabled();
 		if (ImGui::Checkbox("Start Rendering", &accumulationEnabled))
@@ -467,17 +463,8 @@ void Application::LoadJSONScenes()
 						const float roughness = jsonMaterial["Roughness"];
 						const float metallic = jsonMaterial["Metallic"];
 						const float emissionPower = jsonMaterial["EmissionPower"];
-
-						if (emissionPower > 0.0f)
-						{
-							const glm::vec3 emissionColor = { jsonMaterial["EmissionColor"][0], jsonMaterial["EmissionColor"][1],
-								jsonMaterial["EmissionColor"][2] };
-							scene.GetMaterials().emplace_back(color, roughness, metallic, emissionColor, emissionPower);
-						}
-						else
-						{
-							scene.GetMaterials().emplace_back(color, roughness, metallic);
-						}
+						
+						scene.GetMaterials().emplace_back(color, roughness, metallic, emissionPower);
 					}
 				}
 
@@ -494,7 +481,13 @@ void Application::LoadJSONScenes()
 						scene.GetSpheres().emplace_back(name, position, radius, materialIndex);
 					}
 				}
+				const glm::vec3 bgColor = {
+					fileContents["BackgroundColor"][0],
+					fileContents["BackgroundColor"][1],
+					fileContents["BackgroundColor"][2]
+				};
 
+				m_Renderer->SetBgColor(bgColor);
 				m_Scenes[sceneName] = std::make_shared<Scene>(scene);
 				m_SceneFilePaths[sceneName] = file.path().string();
 
@@ -530,15 +523,6 @@ void Application::SaveJSONScenes()
 			materialJson["Metallic"] = material.Metallic;
 			materialJson["EmissionPower"] = material.EmissionPower;
 
-			if (material.IsEmissive())
-			{
-				materialJson["EmissionColor"] = { material.EmissionColor.r, material.EmissionColor.g, material.EmissionColor.b };
-			}
-			else
-			{
-				materialJson["EmissionColor"] = { 0.0f, 0.0f, 0.0f };
-			}
-
 			materialsJson.push_back(materialJson);
 		}
 		sceneJson["Materials"] = materialsJson;
@@ -569,6 +553,9 @@ void Application::SaveJSONScenes()
 
 		sceneJson["ActiveCameraIndex"] = scenePtr->GetActiveCameraIndex();
 
+		glm::vec3& bgColor = m_Renderer->GetBgColorRef();
+		sceneJson["BackgroundColor"] = { bgColor.x, bgColor.y, bgColor.z };
+
 		std::ofstream outFile(filePath);
 		if (outFile.is_open())
 		{
@@ -581,6 +568,10 @@ void Application::SaveJSONScenes()
 Application::~Application()
 {
 	SaveJSONScenes();
+
+	m_Window.reset();
+	m_Renderer.reset();
+
 	glfwTerminate();
 }
 

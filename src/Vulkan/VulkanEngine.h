@@ -110,7 +110,8 @@ private:
 
 	VmaAllocator m_Allocator;
 
-	AllocatedImage m_RenderImage;
+	AllocatedImage m_LDRImage;
+	AllocatedImage m_HDRImage;
 	AllocatedImage m_AccumulationImage;
 
 	VkFence m_ImmediateFence;

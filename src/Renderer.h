@@ -40,6 +40,9 @@ public:
 	uint32_t GetMaxRayBounces() const { return m_MaxRayBounces; }
 	uint32_t& GetMaxRayBounces() { return m_MaxRayBounces; }
 
+	void SetBgColor(const glm::vec3& bgColor) { m_BackgroundColor = bgColor; }
+	glm::vec3& GetBgColorRef() { return m_BackgroundColor; }
+
 
 	void SetMaxSamples(uint32_t maxSamples) { m_MaxSamples = maxSamples; }
 	uint32_t GetMaxSamples() const { return m_MaxSamples; }
@@ -60,6 +63,7 @@ private:
 
 	std::weak_ptr<Scene> m_CurrentScene;
 
+	glm::vec3 m_BackgroundColor = { 0.5f, 0.7f, 1.0f };
 	uint32_t m_SampleCount = 0;
 	uint32_t m_MaxRayBounces;
 	uint32_t m_MaxSamples;
