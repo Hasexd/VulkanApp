@@ -7,7 +7,7 @@
 
 namespace
 {
-	void TransitionImage(const VkCommandBuffer cmd, const VkImage image, const VkImageLayout currentLayout, const VkImageLayout newLayout)
+	void TransitionImage(const VkCommandBuffer cmd, const VkImage image, const VkImageLayout currentLayout, const VkImageLayout newLayout, uint32_t mipLevels)
 	{
 		VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
 		imageBarrier.pNext = nullptr;
@@ -23,7 +23,7 @@ namespace
 		VkImageSubresourceRange subImage{};
 		subImage.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		subImage.baseMipLevel = 0;
-		subImage.levelCount = 1;
+		subImage.levelCount = mipLevels;
 		subImage.baseArrayLayer = 0;
 		subImage.layerCount = 1;
 		imageBarrier.subresourceRange = subImage;
@@ -235,10 +235,11 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 				cmd,
 				m_HDRImage.Image,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				VK_IMAGE_LAYOUT_GENERAL
+				VK_IMAGE_LAYOUT_GENERAL,
+				1
 			);
 
-			TransitionImage(cmd, m_LDRImage.Image, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+			TransitionImage(cmd, m_LDRImage.Image, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
 		}
 
 		const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
@@ -288,14 +289,16 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 			cmd,
 			m_HDRImage.Image,
 			VK_IMAGE_LAYOUT_GENERAL,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			1
 		);
 
 		TransitionImage(
 			cmd,
 			m_LDRImage.Image,
 			VK_IMAGE_LAYOUT_GENERAL,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			1
 		);
 	}
 
@@ -303,7 +306,8 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 		cmd,
 		m_SwapchainImages[swapchainImageIndex],
 		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		1
 	);
 
 	DrawImGui(cmd, m_SwapchainImageViews[swapchainImageIndex]);
@@ -312,7 +316,8 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 		cmd,
 		m_SwapchainImages[swapchainImageIndex],
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		1
 	);
 
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_TimestampQueryPool, 3);
@@ -418,7 +423,8 @@ void VulkanEngine::UpdateTimings()
 void VulkanEngine::DrawImGui(const VkCommandBuffer cmd, const VkImageView targetImageView) const
 {
 	VkRenderingAttachmentInfo colorAttachmentInfo{};
-	colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO; VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	colorAttachmentInfo.pNext = nullptr;
 	colorAttachmentInfo.imageView = targetImageView;
 	colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -723,7 +729,6 @@ void VulkanEngine::InitRenderTargets()
 		CreateImageView(m_LDRImage, m_LDRImage.ImageFormat);
 	}
 
-	TransitionImageLayout(m_LDRImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_HDRImage = CreateImage(imageExtent, VK_FORMAT_R16G16B16A16_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
@@ -733,7 +738,6 @@ void VulkanEngine::InitRenderTargets()
 		CreateImageView(m_HDRImage, m_HDRImage.ImageFormat);
 	}
 
-	TransitionImageLayout(m_HDRImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_AccumulationImage = CreateImage(imageExtent, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
@@ -742,8 +746,6 @@ void VulkanEngine::InitRenderTargets()
 	{
 		CreateImageView(m_AccumulationImage, m_AccumulationImage.ImageFormat);
 	}
-
-	TransitionImageLayout(m_AccumulationImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	if (m_RenderSampler == VK_NULL_HANDLE) 
 	{
@@ -758,6 +760,28 @@ void VulkanEngine::InitRenderTargets()
 
 		vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_RenderSampler);
 	}
+
+	vkResetCommandBuffer(m_ImmediateCommandBuffer, 0);
+	VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkBeginCommandBuffer(m_ImmediateCommandBuffer, &bi);
+
+	TransitionImage(m_ImmediateCommandBuffer, m_LDRImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
+	TransitionImage(m_ImmediateCommandBuffer, m_HDRImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
+	TransitionImage(m_ImmediateCommandBuffer, m_AccumulationImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
+
+	vkEndCommandBuffer(m_ImmediateCommandBuffer);
+
+	vkResetFences(m_Device, 1, &m_ImmediateFence);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_ImmediateCommandBuffer;
+
+	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
+	vkQueueWaitIdle(m_GraphicsQueue);
 
 	m_RenderTextureData.SetTexID(reinterpret_cast<ImTextureID>(ImGui_ImplVulkan_AddTexture(
 		m_RenderSampler,
@@ -1148,82 +1172,5 @@ void VulkanEngine::DestroySwapchain()
 	for (auto& swapchainImageView : m_SwapchainImageViews)
 	{
 		vkDestroyImageView(m_Device, swapchainImageView, nullptr);
-	}
-}
-
-void VulkanEngine::TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const
-{
-	VkCommandBuffer cmd = m_ImmediateCommandBuffer;
-
-	VkCommandBufferBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	VkResult result = vkBeginCommandBuffer(cmd, &beginInfo);
-	if (result != VK_SUCCESS) {
-		std::println("Failed to begin command buffer for image transition");
-		return;
-	}
-
-	VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
-	imageBarrier.pNext = nullptr;
-	imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-	imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
-	imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-	imageBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
-	imageBarrier.oldLayout = oldLayout;
-	imageBarrier.newLayout = newLayout;
-
-	VkImageSubresourceRange subImage{};
-	subImage.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	subImage.baseMipLevel = 0;
-	subImage.levelCount = 1;
-	subImage.baseArrayLayer = 0;
-	subImage.layerCount = 1;
-	imageBarrier.subresourceRange = subImage;
-	imageBarrier.image = image;
-
-	VkDependencyInfo depInfo{};
-	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	depInfo.imageMemoryBarrierCount = 1;
-	depInfo.pImageMemoryBarriers = &imageBarrier;
-
-	vkCmdPipelineBarrier2(cmd, &depInfo);
-
-	result = vkEndCommandBuffer(cmd);
-	if (result != VK_SUCCESS) {
-		std::println("Failed to end command buffer for image transition");
-		return;
-	}
-
-	vkResetFences(m_Device, 1, &m_ImmediateFence);
-
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &cmd;
-
-	result = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
-	if (result != VK_SUCCESS) {
-		std::println("Failed to submit command buffer for image transition");
-		return;
-	}
-
-	result = vkWaitForFences(m_Device, 1, &m_ImmediateFence, VK_TRUE, UINT64_MAX);
-	if (result != VK_SUCCESS) {
-		std::println("Failed to wait for fence in image transition");
-		return;
-	}
-
-	result = vkResetFences(m_Device, 1, &m_ImmediateFence);
-	if (result != VK_SUCCESS) {
-		std::println("Failed to reset fence in image transition");
-		return;
-	}
-
-	result = vkResetCommandBuffer(cmd, 0);
-	if (result != VK_SUCCESS) {
-		std::println("Failed to reset command buffer in image transition");
-		return;
 	}
 }

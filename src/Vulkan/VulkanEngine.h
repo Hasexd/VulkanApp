@@ -69,8 +69,6 @@ private:
 
 	void UpdateDescriptorSets(const Shader& shader) const;
 
-	void TransitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const;
-
 	void CreateTimestampQueryPool();
 	void UpdateTimings();
 
@@ -113,6 +111,9 @@ private:
 	AllocatedImage m_LDRImage;
 	AllocatedImage m_HDRImage;
 	AllocatedImage m_AccumulationImage;
+	AllocatedImage m_BloomImage;
+
+	uint32_t m_BloomMipLevels = 0;
 
 	VkFence m_ImmediateFence;
 	VkCommandBuffer m_ImmediateCommandBuffer;
