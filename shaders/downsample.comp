@@ -1,21 +1,58 @@
 #version 450
-
+#extension GL_KHR_vulkan_glsl : enable
 layout(local_size_x = 16, local_size_y = 16) in;
-
 layout(binding = 0) uniform sampler2D srcMip;
 layout(binding = 1, rgba16f) uniform writeonly image2D dstMip;
+layout(push_constant) uniform constants {
+    int IsBrightPass;
+} BrightPassConstants; 
+
+vec4 DownsampleBox13(sampler2D tex, vec2 uv, vec2 texelSize) {
+    vec4 a = texture(tex, uv + vec2(-1.0, -1.0) * texelSize);
+    vec4 b = texture(tex, uv + vec2( 0.0, -1.0) * texelSize);
+    vec4 c = texture(tex, uv + vec2( 1.0, -1.0) * texelSize);
+    vec4 d = texture(tex, uv + vec2(-0.5, -0.5) * texelSize);
+    vec4 e = texture(tex, uv + vec2( 0.5, -0.5) * texelSize);
+    
+    vec4 f = texture(tex, uv + vec2(-1.0,  0.0) * texelSize);
+    vec4 g = texture(tex, uv);
+    vec4 h = texture(tex, uv + vec2( 1.0,  0.0) * texelSize);
+    vec4 i = texture(tex, uv + vec2(-0.5,  0.5) * texelSize);
+    vec4 j = texture(tex, uv + vec2( 0.5,  0.5) * texelSize);
+    
+    vec4 k = texture(tex, uv + vec2(-1.0,  1.0) * texelSize);
+    vec4 l = texture(tex, uv + vec2( 0.0,  1.0) * texelSize);
+    vec4 m = texture(tex, uv + vec2( 1.0,  1.0) * texelSize);
+    
+    vec4 result = (d + e + i + j) * 0.5;
+    result += (a + b + g + f) * 0.125;
+    result += (b + c + h + g) * 0.125;
+    result += (f + g + l + k) * 0.125;
+    result += (g + h + m + l) * 0.125;
+    
+    return result * 0.25;
+}
 
 void main() {
     ivec2 dstPos = ivec2(gl_GlobalInvocationID.xy);
     ivec2 dstSize = imageSize(dstMip);
     
-    if (dstPos.x >= dstSize.x || dstPos.y >= dstSize.y) 
-    {
+    if (dstPos.x >= dstSize.x || dstPos.y >= dstSize.y) {
         return;
     }
     
     vec2 texCoord = (vec2(dstPos) + 0.5) / vec2(dstSize);
-    vec4 color = texture(srcMip, texCoord);
+    vec2 texelSize = 1.0 / vec2(textureSize(srcMip, 0));
+    
+    vec4 color = DownsampleBox13(srcMip, texCoord, texelSize);
+    
+    if(BrightPassConstants.IsBrightPass == 1) {
+        float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+        float threshold = 1.0;
+        float softness = 0.5;
+        float contribution = smoothstep(threshold - softness, threshold + softness, luminance);
+        color.rgb *= contribution;
+    }
     
     imageStore(dstMip, dstPos, color);
 }

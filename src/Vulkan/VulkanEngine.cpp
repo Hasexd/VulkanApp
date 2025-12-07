@@ -62,6 +62,8 @@ namespace
 			return ShaderName::RAY_TRACING;
 		if (string == "downsample" || string == "downsample.comp")
 			return ShaderName::DOWNSAMPLE;
+		if (string == "upsample" || string == "upsample.comp")
+			return ShaderName::UPSAMPLE;
 		if(string == "tone_mapping" || string == "tone_mapping.comp")
 			return ShaderName::TONE_MAPPING;
 
@@ -132,7 +134,7 @@ void VulkanEngine::ReloadShaders()
 			const auto& bindings = shader.Bindings;
 			shader.Destroy(m_Device);
 
-			CreateShader(shaderName, bindings, std::format("../shaders/compiled/{}.spv", fileName));
+			CreateShader(shaderName, bindings, nullptr, std::format("../shaders/compiled/{}.spv", fileName));
 			UpdateDescriptorSets(m_Shaders[shaderName]);
 		}
 		else
@@ -239,7 +241,7 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 				m_MipLevels
 			);
 
-			TransitionImage(cmd, m_LDRImage.Image, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
+			TransitionImage(cmd, m_LDRImage.Image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
 		}
 
 		const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
@@ -260,7 +262,11 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
-		Downsample(m_HDRImage.Image, VK_FORMAT_R16G16B16A16_SFLOAT, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
+		Downsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
+
+		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+
+		Upsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
 
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
@@ -361,7 +367,27 @@ void VulkanEngine::RecreateRenderTargets()
 	vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
 	DestroyImage(m_AccumulationImage);
 
+	for(auto view : m_MipmapImageViews)
+	{
+		vkDestroyImageView(m_Device, view, nullptr);
+	}
+
+	for (auto& descSet : m_DownsampleDescriptorSets)
+	{
+		vkFreeDescriptorSets(m_Device, m_MipmapsPool, 1, &descSet);
+	}
+
+	for (auto& descSet : m_UpsampleDescriptorSets)
+	{
+		vkFreeDescriptorSets(m_Device, m_MipmapsPool, 1, &descSet);
+	}
+
+	m_UpsampleDescriptorSets.clear();
+	m_DownsampleDescriptorSets.clear();
+	m_MipmapImageViews.clear();
+
 	InitRenderTargets();
+	InitMitmapsResources();
 
 	Shader& rtShader = m_Shaders[ShaderName::RAY_TRACING];
 	Shader& toneMappingShader = m_Shaders[ShaderName::TONE_MAPPING];
@@ -514,7 +540,7 @@ void VulkanEngine::InitShaders()
 		DescriptorBinding(MaterialBuffer)
 	};
 
-	CreateShader(ShaderName::RAY_TRACING, rtBindings, "../shaders/compiled/ray_tracing.spv");
+	CreateShader(ShaderName::RAY_TRACING, rtBindings, nullptr, "../shaders/compiled/ray_tracing.spv");
 
 	const std::vector<DescriptorBinding> toneMappingBindings =
 	{
@@ -522,7 +548,7 @@ void VulkanEngine::InitShaders()
 		DescriptorBinding(m_LDRImage)
 	};
 
-	CreateShader(ShaderName::TONE_MAPPING, toneMappingBindings, "../shaders/compiled/tone_mapping.spv");
+	CreateShader(ShaderName::TONE_MAPPING, toneMappingBindings, nullptr, "../shaders/compiled/tone_mapping.spv");
 
 	const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
 	const Shader& toneMappingShader = m_Shaders.at(ShaderName::TONE_MAPPING);
@@ -533,6 +559,7 @@ void VulkanEngine::InitShaders()
 
 void VulkanEngine::CreateShader(const ShaderName& shaderName,
 	const std::vector<DescriptorBinding>& bindings,
+	VkPushConstantRange* pushConstantRange,
 	const std::filesystem::path& path)
 {
 	Shader shader;
@@ -598,6 +625,12 @@ void VulkanEngine::CreateShader(const ShaderName& shaderName,
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
 	pipelineLayoutInfo.pSetLayouts = &shader.DescriptorLayout;
+
+	if (pushConstantRange != nullptr)
+	{
+		pipelineLayoutInfo.pPushConstantRanges = pushConstantRange;
+		pipelineLayoutInfo.pushConstantRangeCount = 1;
+	}
 
 	if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &shader.PipelineLayout))
 	{
@@ -673,97 +706,74 @@ void VulkanEngine::UpdateDescriptorSets(const Shader& shader) const
 		descriptorWrites.data(), 0, nullptr);
 }
 
-void VulkanEngine::Downsample(VkImage image, VkFormat imageFormat, int32_t width, int32_t height, uint32_t mipLevels)
+void VulkanEngine::Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels)
 {
-	Shader* downsampleShader = nullptr;
+	Shader& upsampleShader = m_Shaders[ShaderName::UPSAMPLE];
 
-	if (!m_Shaders.contains(ShaderName::DOWNSAMPLE))
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.image = image;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+	barrier.subresourceRange.levelCount = 1;
+
+
+	for (int32_t mip = mipLevels - 2; mip >= 0; mip--)
 	{
-		VkDescriptorImageInfo dmmySrc = {};
-		dmmySrc.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		dmmySrc.sampler = m_RenderSampler;
+		uint32_t mipWidth = glm::max(1u, static_cast<uint32_t>(width >> mip));
+		uint32_t mipHeight = glm::max(1u, static_cast<uint32_t>(height >> mip));
 
-		VkDescriptorImageInfo dmmyDst = {};
-		dmmyDst.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.subresourceRange.baseMipLevel = mip + 1;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-		std::vector<DescriptorBinding> downsampleBindings =
-		{
-			DescriptorBinding(dmmySrc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER),
-			DescriptorBinding(dmmyDst)
-		};
-		CreateShader(ShaderName::DOWNSAMPLE, downsampleBindings, "../shaders/compiled/downsample.spv");
+		vkCmdPipelineBarrier(cmd,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+		barrier.subresourceRange.baseMipLevel = mip;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+		vkCmdPipelineBarrier(cmd,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, upsampleShader.Pipeline);
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+			upsampleShader.PipelineLayout,
+			0, 1, &m_UpsampleDescriptorSets[mip],
+			0, nullptr);
+
+		uint32_t gx = (mipWidth + 15) / 16;
+		uint32_t gy = (mipHeight + 15) / 16;
+		vkCmdDispatch(cmd, gx, gy, 1);
+
+		barrier.subresourceRange.baseMipLevel = mip;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		vkCmdPipelineBarrier(cmd,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0, 0, nullptr, 0, nullptr, 1, &barrier);
 	}
-	downsampleShader = &m_Shaders[ShaderName::DOWNSAMPLE];
+}
 
-	std::vector<VkImageView> mipViews(mipLevels);
-	for (uint32_t mip = 0; mip < mipLevels; mip++)
-	{
-		VkImageViewCreateInfo viewInfo = {};
-		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = image;
-		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		viewInfo.format = imageFormat;
-		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		viewInfo.subresourceRange.baseMipLevel = mip;
-		viewInfo.subresourceRange.levelCount = 1;
-		viewInfo.subresourceRange.layerCount = 1;
-		vkCreateImageView(m_Device, &viewInfo, nullptr, &mipViews[mip]);
-	}
-
-	VkDescriptorPoolSize poolSizes[] = {
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, mipLevels - 1 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, mipLevels - 1 }
-	};
-
-	VkDescriptorPoolCreateInfo poolInfo = {};
-	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.maxSets = mipLevels - 1;
-	poolInfo.poolSizeCount = 2;
-	poolInfo.pPoolSizes = poolSizes;
-
-	VkDescriptorPool descriptorPool;
-	vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &descriptorPool);
-
-	std::vector<VkDescriptorSet> descriptorSets(mipLevels - 1);
-	std::vector<VkDescriptorSetLayout> layouts(mipLevels - 1, downsampleShader->DescriptorLayout);
-
-	VkDescriptorSetAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.descriptorSetCount = mipLevels - 1;
-	allocInfo.pSetLayouts = layouts.data();
-
-	vkAllocateDescriptorSets(m_Device, &allocInfo, descriptorSets.data());
-
-	for (uint32_t mip = 1; mip < mipLevels; mip++)
-	{
-		VkDescriptorImageInfo srcInfo = {};
-		srcInfo.imageView = mipViews[mip - 1];
-		srcInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		srcInfo.sampler = m_RenderSampler;
-
-		VkDescriptorImageInfo dstInfo = {};
-		dstInfo.imageView = mipViews[mip];
-		dstInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-		VkWriteDescriptorSet writes[2] = {};
-
-		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[0].dstSet = descriptorSets[mip - 1];
-		writes[0].dstBinding = 0;
-		writes[0].descriptorCount = 1;
-		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		writes[0].pImageInfo = &srcInfo;
-
-		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[1].dstSet = descriptorSets[mip - 1];
-		writes[1].dstBinding = 1;
-		writes[1].descriptorCount = 1;
-		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		writes[1].pImageInfo = &dstInfo;
-
-		vkUpdateDescriptorSets(m_Device, 2, writes, 0, nullptr);
-	}
+void VulkanEngine::Downsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels)
+{
+	Shader& downsampleShader = m_Shaders[ShaderName::DOWNSAMPLE];
 
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -778,15 +788,16 @@ void VulkanEngine::Downsample(VkImage image, VkFormat imageFormat, int32_t width
 	uint32_t mipWidth = width;
 	uint32_t mipHeight = height;
 
-	vkResetCommandBuffer(m_ImmediateCommandBuffer, 0);
-	VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	vkBeginCommandBuffer(m_ImmediateCommandBuffer, &bi);
+	TransitionImage(cmd, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_MipLevels);
 
-	TransitionImage(m_ImmediateCommandBuffer, m_HDRImage.Image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_MipLevels);
-
+	int isBrightPass = 1;
 	for (uint32_t mip = 1; mip < mipLevels; mip++)
 	{
+		if (mip > 1)
+			isBrightPass = 0;
+
+		vkCmdPushConstants(cmd, downsampleShader.PipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int), &isBrightPass);
+
 		mipWidth = glm::max(1u, mipWidth / 2);
 		mipHeight = glm::max(1u, mipHeight / 2);
 
@@ -796,20 +807,20 @@ void VulkanEngine::Downsample(VkImage image, VkFormat imageFormat, int32_t width
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 
-		vkCmdPipelineBarrier(m_ImmediateCommandBuffer,
+		vkCmdPipelineBarrier(cmd,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			0, 0, nullptr, 0, nullptr, 1, &barrier);
 
-		vkCmdBindPipeline(m_ImmediateCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, downsampleShader->Pipeline);
-		vkCmdBindDescriptorSets(m_ImmediateCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-			downsampleShader->PipelineLayout,
-			0, 1, &descriptorSets[mip - 1],
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, downsampleShader.Pipeline);
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+			downsampleShader.PipelineLayout,
+			0, 1, &m_DownsampleDescriptorSets[mip - 1],
 			0, nullptr);
 
 		uint32_t gx = (mipWidth + 15) / 16;
 		uint32_t gy = (mipHeight + 15) / 16;
-		vkCmdDispatch(m_ImmediateCommandBuffer, gx, gy, 1);
+		vkCmdDispatch(cmd, gx, gy, 1);
 
 		barrier.subresourceRange.baseMipLevel = mip;
 		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -817,29 +828,13 @@ void VulkanEngine::Downsample(VkImage image, VkFormat imageFormat, int32_t width
 		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-		vkCmdPipelineBarrier(m_ImmediateCommandBuffer,
+		vkCmdPipelineBarrier(cmd,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			0, 0, nullptr, 0, nullptr, 1, &barrier);
 	}
 
-	TransitionImage(m_ImmediateCommandBuffer, m_HDRImage.Image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, m_MipLevels);
-
-	vkEndCommandBuffer(m_ImmediateCommandBuffer);
-	vkResetFences(m_Device, 1, &m_ImmediateFence);
-
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_ImmediateCommandBuffer;
-
-	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
-	vkWaitForFences(m_Device, 1, &m_ImmediateFence, VK_TRUE, UINT64_MAX);
-
-	vkDestroyDescriptorPool(m_Device, descriptorPool, nullptr);
-	for (auto view : mipViews) {
-		vkDestroyImageView(m_Device, view, nullptr);
-	}
+	TransitionImage(cmd, image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, m_MipLevels);
 }
 
 void VulkanEngine::InitBuffers()
@@ -905,9 +900,9 @@ void VulkanEngine::InitRenderTargets()
 		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
+		samplerInfo.maxLod = FLT_MAX;
 		samplerInfo.mipLodBias = 0.0f;
 
 		vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_RenderSampler);
@@ -940,6 +935,158 @@ void VulkanEngine::InitRenderTargets()
 		m_LDRImage.ImageView,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	)));
+}
+
+void VulkanEngine::InitMitmapsResources()
+{
+	Shader* downsampleShader = nullptr;
+
+	if (!m_Shaders.contains(ShaderName::DOWNSAMPLE))
+	{
+		VkDescriptorImageInfo dmmySrc = {};
+		dmmySrc.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		dmmySrc.sampler = m_RenderSampler;
+
+		VkDescriptorImageInfo dmmyDst = {};
+		dmmyDst.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		std::vector<DescriptorBinding> downsampleBindings =
+		{
+			DescriptorBinding(dmmySrc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER),
+			DescriptorBinding(dmmyDst)
+		};
+
+		VkPushConstantRange brightPassPushConstant = {};
+		brightPassPushConstant.offset = 0;
+		brightPassPushConstant.size = sizeof(int);
+		brightPassPushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+		CreateShader(ShaderName::DOWNSAMPLE, downsampleBindings, &brightPassPushConstant, "../shaders/compiled/downsample.spv");
+	}
+
+	downsampleShader = &m_Shaders.at(ShaderName::DOWNSAMPLE);
+
+	if (!m_Shaders.contains(ShaderName::UPSAMPLE))
+	{
+		VkDescriptorImageInfo dmmySrc = {};
+		dmmySrc.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		dmmySrc.sampler = m_RenderSampler;
+
+		VkDescriptorImageInfo dmmyDst = {};
+		dmmyDst.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		std::vector<DescriptorBinding> upsampleBindings =
+		{
+			DescriptorBinding(dmmySrc, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER),
+			DescriptorBinding(dmmyDst)
+		};
+
+		CreateShader(ShaderName::UPSAMPLE, upsampleBindings, nullptr, "../shaders/compiled/upsample.spv");
+	}
+
+	m_MipmapImageViews.resize(m_MipLevels);
+
+	for (uint32_t mip = 0; mip < m_MipLevels; mip++)
+	{
+		VkImageViewCreateInfo viewInfo = {};
+		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		viewInfo.image = m_HDRImage.Image;
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		viewInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		viewInfo.subresourceRange.baseMipLevel = mip;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.layerCount = 1;
+		vkCreateImageView(m_Device, &viewInfo, nullptr, &m_MipmapImageViews[mip]);
+	}
+
+	VkDescriptorPoolSize poolSizes[] = {
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_MipLevels - 1 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, m_MipLevels - 1 }
+	};
+
+	VkDescriptorPoolCreateInfo poolInfo = {};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.maxSets = (m_MipLevels - 1) * 2;
+	poolInfo.poolSizeCount = 2;
+	poolInfo.pPoolSizes = poolSizes;
+	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
+	vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_MipmapsPool);
+
+	std::vector<VkDescriptorSetLayout> layouts(m_MipLevels - 1, downsampleShader->DescriptorLayout);
+
+	VkDescriptorSetAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = m_MipmapsPool;
+	allocInfo.descriptorSetCount = m_MipLevels - 1;
+	allocInfo.pSetLayouts = layouts.data();
+
+	m_DownsampleDescriptorSets.resize(m_MipLevels - 1);
+	m_UpsampleDescriptorSets.resize(m_MipLevels - 1);
+
+	vkAllocateDescriptorSets(m_Device, &allocInfo, m_DownsampleDescriptorSets.data());
+	vkAllocateDescriptorSets(m_Device, &allocInfo, m_UpsampleDescriptorSets.data());
+
+	for (uint32_t mip = 1; mip < m_MipLevels; mip++)
+	{
+		VkDescriptorImageInfo srcInfo = {};
+		srcInfo.imageView = m_MipmapImageViews[mip - 1];
+		srcInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		srcInfo.sampler = m_RenderSampler;
+
+		VkDescriptorImageInfo dstInfo = {};
+		dstInfo.imageView = m_MipmapImageViews[mip];
+		dstInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		VkWriteDescriptorSet writes[2] = {};
+
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].dstSet = m_DownsampleDescriptorSets[mip - 1];
+		writes[0].dstBinding = 0;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writes[0].pImageInfo = &srcInfo;
+
+		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[1].dstSet = m_DownsampleDescriptorSets[mip - 1];
+		writes[1].dstBinding = 1;
+		writes[1].descriptorCount = 1;
+		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		writes[1].pImageInfo = &dstInfo;
+
+		vkUpdateDescriptorSets(m_Device, 2, writes, 0, nullptr);
+	}
+
+	for (int32_t mip = m_MipLevels - 2; mip >= 0; mip--)
+	{
+		VkDescriptorImageInfo srcInfo = {};
+		srcInfo.imageView = m_MipmapImageViews[mip + 1];
+		srcInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		srcInfo.sampler = m_RenderSampler;
+
+		VkDescriptorImageInfo dstInfo = {};
+		dstInfo.imageView = m_MipmapImageViews[mip];
+		dstInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		VkWriteDescriptorSet writes[2] = {};
+
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].dstSet = m_UpsampleDescriptorSets[mip];
+		writes[0].dstBinding = 0;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writes[0].pImageInfo = &srcInfo;
+
+		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[1].dstSet = m_UpsampleDescriptorSets[mip];
+		writes[1].dstBinding = 1;
+		writes[1].descriptorCount = 1;
+		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		writes[1].pImageInfo = &dstInfo;
+
+		vkUpdateDescriptorSets(m_Device, 2, writes, 0, nullptr);
+	}
 }
 
 void VulkanEngine::InitSyncStructures()
@@ -1296,6 +1443,11 @@ void VulkanEngine::Cleanup()
 		DestroyImage(m_HDRImage);
 		DestroyImage(m_AccumulationImage);
 
+		for(auto& mipView : m_MipmapImageViews)
+		{
+			vkDestroyImageView(m_Device, mipView, nullptr);
+		}
+
 		vkDestroyImageView(m_Device, m_LDRImage.ImageView, nullptr);
 		vkDestroyImageView(m_Device, m_HDRImage.ImageView, nullptr);
 		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
@@ -1304,7 +1456,18 @@ void VulkanEngine::Cleanup()
 
 		DestroySwapchain();
 
+		for(auto& descSet : m_DownsampleDescriptorSets)
+		{
+			vkFreeDescriptorSets(m_Device, m_MipmapsPool, 1, &descSet);
+		}
+
+		for (auto& descSet : m_UpsampleDescriptorSets)
+		{
+			vkFreeDescriptorSets(m_Device, m_MipmapsPool, 1, &descSet);
+		}
+
 		vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+		vkDestroyDescriptorPool(m_Device, m_MipmapsPool, nullptr);
 		vkDestroyDescriptorPool(m_Device, m_ImGuiPool, nullptr);
 
 		vkDestroyDevice(m_Device, nullptr);

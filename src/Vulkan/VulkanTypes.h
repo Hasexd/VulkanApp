@@ -13,6 +13,7 @@ enum class ShaderName : uint8_t
 	NONE,
 	RAY_TRACING,
 	DOWNSAMPLE,
+	UPSAMPLE,
 	TONE_MAPPING
 };
 

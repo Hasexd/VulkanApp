@@ -68,7 +68,10 @@ private:
 	void InitRenderTargets();
 	void InitBuffers();
 
-	void Downsample(VkImage image, VkFormat imageFormat, int32_t width, int32_t height, uint32_t mipLevels);
+	void InitMitmapsResources();
+
+	void Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
+	void Downsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
 
 	void UpdateDescriptorSets(const Shader& shader) const;
 
@@ -77,6 +80,7 @@ private:
 
 	void CreateShader(const ShaderName& shaderName,
 		const std::vector<DescriptorBinding>& bindings,
+		VkPushConstantRange* pushConstantRange,
 		const std::filesystem::path& path);
 
 	void CreateSwapchain(uint32_t width, uint32_t height);
@@ -115,6 +119,10 @@ private:
 	AllocatedImage m_HDRImage;
 	AllocatedImage m_AccumulationImage;
 
+	std::vector<VkImageView> m_MipmapImageViews;
+	std::vector<VkDescriptorSet> m_DownsampleDescriptorSets;
+	std::vector<VkDescriptorSet> m_UpsampleDescriptorSets;
+	VkDescriptorPool m_MipmapsPool;
 	uint32_t m_MipLevels = 0;
 
 	VkFence m_ImmediateFence;
