@@ -12,7 +12,7 @@ enum class ShaderName : uint8_t
 {
 	NONE,
 	RAY_TRACING,
-	BLOOM,
+	DOWNSAMPLE,
 	TONE_MAPPING
 };
 
@@ -116,6 +116,20 @@ struct DescriptorBinding
 	{
 		ImageInfo.imageView = image.ImageView;
 		ImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	}
+
+	explicit DescriptorBinding(const AllocatedImage& image, VkSampler sampler, const VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+		: Type(type)
+	{
+		ImageInfo.imageView = image.ImageView;
+		ImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		ImageInfo.sampler = sampler;
+	}
+
+	explicit DescriptorBinding(VkDescriptorImageInfo info, const VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+		: Type(type)
+	{
+		ImageInfo = info;
 	}
 
 	explicit DescriptorBinding(const AllocatedBuffer& buffer, const VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, const VkDeviceSize size = VK_WHOLE_SIZE)

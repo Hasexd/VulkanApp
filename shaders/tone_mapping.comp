@@ -2,7 +2,7 @@
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(binding = 0, rgba16) readonly uniform image2D HDRImage;
+layout(binding = 0, rgba16f) readonly uniform image2D HDRImage;
 layout(binding = 1, rgba8) writeonly uniform image2D LDRImage;
 
 vec3 RttAndOdtFit(vec3 v)

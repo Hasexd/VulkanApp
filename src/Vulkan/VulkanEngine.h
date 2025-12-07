@@ -13,6 +13,7 @@
 #include <GLFW/glfw3.h>
 #include <vk_mem_alloc.h>
 #include <glm.hpp>
+#include <gtc/integer.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -50,8 +51,8 @@ public:
 
 private:
 
-	[[nodiscard]] AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage) const;
-	void CreateImageView(AllocatedImage& image, const VkFormat format) const;
+	[[nodiscard]] AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, uint32_t mipLevels) const;
+	void CreateImageView(AllocatedImage& image, const VkFormat format, uint32_t mipLevels) const;
 	[[nodiscard]] AllocatedBuffer CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;
 
 	void RecreateSwapchain(uint32_t width, uint32_t height);
@@ -66,6 +67,8 @@ private:
 
 	void InitRenderTargets();
 	void InitBuffers();
+
+	void Downsample(VkImage image, VkFormat imageFormat, int32_t width, int32_t height, uint32_t mipLevels);
 
 	void UpdateDescriptorSets(const Shader& shader) const;
 
@@ -111,9 +114,8 @@ private:
 	AllocatedImage m_LDRImage;
 	AllocatedImage m_HDRImage;
 	AllocatedImage m_AccumulationImage;
-	AllocatedImage m_BloomImage;
 
-	uint32_t m_BloomMipLevels = 0;
+	uint32_t m_MipLevels = 0;
 
 	VkFence m_ImmediateFence;
 	VkCommandBuffer m_ImmediateCommandBuffer;
