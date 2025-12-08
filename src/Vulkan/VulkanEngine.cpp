@@ -726,19 +726,8 @@ void VulkanEngine::Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, i
 		uint32_t mipWidth = glm::max(1u, static_cast<uint32_t>(width >> mip));
 		uint32_t mipHeight = glm::max(1u, static_cast<uint32_t>(height >> mip));
 
-		barrier.subresourceRange.baseMipLevel = mip + 1;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		vkCmdPipelineBarrier(cmd,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			0, 0, nullptr, 0, nullptr, 1, &barrier);
-
 		barrier.subresourceRange.baseMipLevel = mip;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -760,7 +749,7 @@ void VulkanEngine::Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, i
 
 		barrier.subresourceRange.baseMipLevel = mip;
 		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
@@ -769,6 +758,8 @@ void VulkanEngine::Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, i
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			0, 0, nullptr, 0, nullptr, 1, &barrier);
 	}
+
+	TransitionImage(cmd, image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, m_MipLevels);
 }
 
 void VulkanEngine::Downsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels)
@@ -788,7 +779,16 @@ void VulkanEngine::Downsample(VkCommandBuffer cmd, VkImage image, int32_t width,
 	uint32_t mipWidth = width;
 	uint32_t mipHeight = height;
 
-	TransitionImage(cmd, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_MipLevels);
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	vkCmdPipelineBarrier(cmd,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		0, 0, nullptr, 0, nullptr, 1, &barrier);
 
 	int isBrightPass = 1;
 	for (uint32_t mip = 1; mip < mipLevels; mip++)
@@ -802,7 +802,7 @@ void VulkanEngine::Downsample(VkCommandBuffer cmd, VkImage image, int32_t width,
 		mipHeight = glm::max(1u, mipHeight / 2);
 
 		barrier.subresourceRange.baseMipLevel = mip;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -833,8 +833,6 @@ void VulkanEngine::Downsample(VkCommandBuffer cmd, VkImage image, int32_t width,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			0, 0, nullptr, 0, nullptr, 1, &barrier);
 	}
-
-	TransitionImage(cmd, image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, m_MipLevels);
 }
 
 void VulkanEngine::InitBuffers()
