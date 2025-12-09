@@ -12,6 +12,7 @@ struct Material
     vec3 Color;
     float Roughness;
     float Metallic;
+    float Specular;
     float EmissionPower;
 };
 
@@ -60,7 +61,6 @@ layout(std430, binding = 4) buffer MaterialBuffer
 {
     Material[] Materials;
 };
-
 
 const float PI = 3.14159265359;
 const float EPSILON = 0.01;
@@ -220,6 +220,7 @@ vec4 RayGen(vec2 coord, uint sampleCount)
 
             ray.Origin = hit.WorldPosition + hit.WorldNormal * EPSILON;
             ray.Direction = CosineWeightedHemisphere(hit.WorldNormal, seed);
+
         }
         else
         {

@@ -1,7 +1,5 @@
 ﻿#include "Application.h"
 
-
-
 namespace
 {
 	void ErrorCallback(int error, const char* description)
@@ -9,7 +7,6 @@ namespace
 		std::println("Error: {}\n", description);
 	}
 }
-
 
 Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized, const std::string& defaultScene) :
 	m_Window(nullptr, glfwDestroyWindow)
@@ -28,7 +25,6 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 		}
 	}
 }
-
 
 void Application::Run()
 {
@@ -163,6 +159,10 @@ void Application::DrawImGui()
 			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color)))
 				sceneChanged = true;
 			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
+				sceneChanged = true;
+			if(ImGui::DragFloat("Metallic", &material.Metallic, 0.01f, 0.0f, 1.0f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Specular", &material.Specular, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
 			if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
 				sceneChanged = true;
@@ -463,9 +463,10 @@ void Application::LoadJSONScenes()
 
 						const float roughness = jsonMaterial["Roughness"];
 						const float metallic = jsonMaterial["Metallic"];
+						const float specular = jsonMaterial["Specular"];
 						const float emissionPower = jsonMaterial["EmissionPower"];
 						
-						scene.GetMaterials().emplace_back(color, roughness, metallic, emissionPower);
+						scene.GetMaterials().emplace_back(color, roughness, metallic, specular, emissionPower);
 					}
 				}
 
@@ -522,6 +523,7 @@ void Application::SaveJSONScenes()
 			materialJson["Color"] = { material.Color.r, material.Color.g, material.Color.b };
 			materialJson["Roughness"] = material.Roughness;
 			materialJson["Metallic"] = material.Metallic;
+			materialJson["Specular"] = material.Specular;
 			materialJson["EmissionPower"] = material.EmissionPower;
 
 			materialsJson.push_back(materialJson);

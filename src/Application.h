@@ -66,4 +66,7 @@ private:
 	std::string m_CurrentSceneName;
 
 	int m_SelectedSphereIndex = -1;
+
+	glm::mat4 m_CurrentViewMatrix = glm::mat4(1.0f);
+	glm::mat4 m_PreviousViewMatrix = glm::mat4(1.0f);
 };

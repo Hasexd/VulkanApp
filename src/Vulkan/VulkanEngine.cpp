@@ -260,10 +260,6 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
-		TAA(cmd, gx, gy, motionVector);
-
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
-
 		Downsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
 
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
@@ -730,13 +726,6 @@ void VulkanEngine::ToneMap(VkCommandBuffer cmd, uint32_t gx, uint32_t gy)
 	vkCmdDispatch(cmd, gx, gy, 1);
 }
 
-void VulkanEngine::TAA(VkCommandBuffer cmd, uint32_t gx, uint32_t gy, const glm::vec2& motionVector)
-{
-	int frameIndex = m_FrameNumber % 16;
-	float jitterX = (Halton(frameIndex, 2) - 0.5f) / m_ViewportWidth;
-	float jitterY = (Halton(frameIndex, 3) - 0.5f) / m_ViewportHeight;
-}
-
 void VulkanEngine::Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels)
 {
 	Shader& upsampleShader = m_Shaders[ShaderName::UPSAMPLE];
@@ -948,7 +937,6 @@ void VulkanEngine::InitRenderTargets()
 	TransitionImage(m_ImmediateCommandBuffer, m_AccumulationImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, 1);
 
 	vkEndCommandBuffer(m_ImmediateCommandBuffer);
-
 	vkResetFences(m_Device, 1, &m_ImmediateFence);
 
 	VkSubmitInfo submitInfo = {};
@@ -1468,18 +1456,18 @@ void VulkanEngine::Cleanup()
 		vmaDestroyBuffer(m_Allocator, SphereBuffer.Buffer, SphereBuffer.Allocation);
 		vmaDestroyBuffer(m_Allocator, MaterialBuffer.Buffer, MaterialBuffer.Allocation);
 
-		DestroyImage(m_LDRImage);
-		DestroyImage(m_HDRImage);
-		DestroyImage(m_AccumulationImage);
+		vkDestroyImageView(m_Device, m_LDRImage.ImageView, nullptr);
+		vkDestroyImageView(m_Device, m_HDRImage.ImageView, nullptr);
+		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
 
-		for(auto& mipView : m_MipmapImageViews)
+		for (auto& mipView : m_MipmapImageViews)
 		{
 			vkDestroyImageView(m_Device, mipView, nullptr);
 		}
 
-		vkDestroyImageView(m_Device, m_LDRImage.ImageView, nullptr);
-		vkDestroyImageView(m_Device, m_HDRImage.ImageView, nullptr);
-		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
+		DestroyImage(m_LDRImage);
+		DestroyImage(m_HDRImage);
+		DestroyImage(m_AccumulationImage);
 
 		m_MainDeletionQueue.Flush();
 

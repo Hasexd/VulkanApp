@@ -18,7 +18,6 @@ Renderer::~Renderer()
 	}
 }
 
-
 void Renderer::OnWindowResize(uint32_t width, uint32_t height) const
 {
 	m_Engine->OnWindowResize(width, height);
@@ -98,7 +97,6 @@ void Renderer::UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const
 		gpuSpheres.push_back(sd);
 	}
 
-
 	void* data;
 	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->SphereBuffer.Allocation, &data);
 	memcpy(data, gpuSpheres.data(), gpuSpheres.size() * sizeof(SphereBufferData));
@@ -120,6 +118,7 @@ void Renderer::UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const
 		md.Color = material.Color;
 		md.Roughness = material.Roughness;
 		md.Metallic = material.Metallic;
+		md.Specular = material.Specular;
 		md.EmissionPower = material.EmissionPower;
 		gpuMaterials.push_back(md);
 	}

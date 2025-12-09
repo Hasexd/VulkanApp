@@ -71,7 +71,6 @@ private:
 	void Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
 	void Downsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
 	void ToneMap(VkCommandBuffer cmd, uint32_t gx, uint32_t gy);
-	void TAA(VkCommandBuffer cmd, uint32_t gx, uint32_t gy, const glm::vec2& motionVector);
 
 	void UpdateDescriptorSets(const Shader& shader) const;
 

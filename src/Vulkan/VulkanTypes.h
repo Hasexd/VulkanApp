@@ -93,6 +93,7 @@ struct MaterialBufferData
 	alignas(16) glm::vec3 Color;
 	float Roughness;
 	float Metallic;
+	float Specular;
 	float EmissionPower;
 };
 
