@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm.hpp>
+#include <gtc/matrix_transform.hpp>
 
 class Camera
 {
@@ -10,19 +11,19 @@ public:
 	void Move(const glm::vec3& movement, double deltaTime);
 	void Rotate(double xOffset, double yOffset);
 
-	glm::vec3 GetPosition() const { return m_Position; }
-	glm::vec3 GetDirection() const { return m_FrontVector; }
-	glm::vec3 GetRight() const { return m_RightVector; }
-	glm::vec3 GetUp() const { return m_UpVector; }
-	float GetFieldOfView() const { return m_FieldOfView; }
-	float GetPitch() const { return m_Pitch; }
-	float GetYaw() const { return m_Yaw; }
+	[[nodiscard]] glm::vec3 GetPosition() const { return m_Position; }
+	[[nodiscard]] glm::vec3 GetDirection() const { return m_FrontVector; }
+	[[nodiscard]] glm::vec3 GetRight() const { return m_RightVector; }
+	[[nodiscard]] glm::vec3 GetUp() const { return m_UpVector; }
+	[[nodiscard]] float GetFieldOfView() const { return m_FieldOfView; }
+	[[nodiscard]] float GetPitch() const { return m_Pitch; }
+	[[nodiscard]] float GetYaw() const { return m_Yaw; }
+
+	[[nodiscard]] glm::mat4 GetViewMatrix() const { return glm::lookAt(m_Position, m_Position + m_FrontVector, m_UpVector); }
 
 	void SetPosition(const glm::vec3& position) { m_Position = position; RecalculateVectors(); }
 	void SetFieldOfView(float fov) { m_FieldOfView = fov; }
 	void SetRotation(float pitch, float yaw) { m_Yaw = yaw; m_Pitch = pitch; RecalculateVectors(); }
-
-	
 private:
 	void RecalculateVectors();
 private:

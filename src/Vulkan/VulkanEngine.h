@@ -29,14 +29,13 @@ class VulkanEngine
 public:
 	VulkanEngine() = default;
 
-	void Init(const std::shared_ptr<GLFWwindow>& window);
-	void DrawFrame(bool dispatchCompute = false);
+	void Init(const std::shared_ptr<GLFWwindow>& window); 
+	void DrawFrame(const glm::vec2& motionVector, bool dispatchCompute = false);
 	void OnWindowResize(uint32_t width, uint32_t height);
 	void SetViewportSize(uint32_t width, uint32_t height);
 	void ReloadShaders();
 
 	[[nodiscard]] ImTextureID GetRenderTextureID() const { return m_RenderTextureData.GetTexID(); }
-
 	[[nodiscard]] VmaAllocator GetAllocator() const { return m_Allocator; }
 	[[nodiscard]] const RenderTime& GetRenderTime() const { return m_RenderTime; }
 
@@ -48,9 +47,7 @@ public:
 	AllocatedBuffer UniformBuffer;
 	AllocatedBuffer SphereBuffer;
 	AllocatedBuffer MaterialBuffer;
-
 private:
-
 	[[nodiscard]] AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, uint32_t mipLevels) const;
 	void CreateImageView(AllocatedImage& image, const VkFormat format, uint32_t mipLevels) const;
 	[[nodiscard]] AllocatedBuffer CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;
@@ -70,8 +67,11 @@ private:
 
 	void InitMitmapsResources();
 
+	void RayTrace(VkCommandBuffer cmd, uint32_t gx, uint32_t gy);
 	void Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
 	void Downsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
+	void ToneMap(VkCommandBuffer cmd, uint32_t gx, uint32_t gy);
+	void TAA(VkCommandBuffer cmd, uint32_t gx, uint32_t gy, const glm::vec2& motionVector);
 
 	void UpdateDescriptorSets(const Shader& shader) const;
 
@@ -95,7 +95,7 @@ private:
 	VkInstance m_Instance;
 	VkPhysicalDevice m_PhysicalDevice;
 	VkDevice m_Device;
-	VkSurfaceKHR m_Surface{};
+	VkSurfaceKHR m_Surface;
 
 	uint32_t m_ViewportWidth = 0;
 	uint32_t m_ViewportHeight = 0;
@@ -148,4 +148,6 @@ private:
 	std::vector<std::string> m_ChangedShaderFiles;
 	std::atomic<bool> m_ShadersNeedReload = false;
 	std::filesystem::path m_ShadersPath = std::filesystem::current_path().parent_path() / "shaders";
+
+	glm::mat4 m_ProjectionMatrix = glm::mat4(0.0f);
 };

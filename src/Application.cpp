@@ -33,7 +33,6 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 void Application::Run()
 {
 	double lastFrame = glfwGetTime();
-
 	while (m_IsRunning)
 	{
 		double currentFrame = glfwGetTime();
@@ -43,6 +42,12 @@ void Application::Run()
 		glfwPollEvents();
 
 		HandleCursorInput();
+
+		if (m_CurrentScene)
+		{
+			HandleCameraRotate(m_CurrentScene->GetActiveCamera());
+			HandleKeyboardInput(m_CurrentScene->GetActiveCamera());
+		}
 
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
@@ -95,11 +100,7 @@ void Application::DrawImGui()
 	bool sceneChanged = false;
 	if (m_CurrentScene)
 	{
-
 		Camera& camera = m_CurrentScene->GetActiveCamera();
-
-		HandleCameraRotate(camera);
-		HandleKeyboardInput(camera);
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);

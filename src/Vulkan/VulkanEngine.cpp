@@ -81,6 +81,21 @@ namespace
 		std::println("Compiling: {}", command);
 		return std::system(command.c_str()) == 0;
 	}
+
+	float Halton(int index, int base)
+	{
+		float result = 0.0f;
+		float f = 1.0f;
+		int i = index;
+
+		while (i > 0)
+		{
+			f /= base;
+			result += f * (i % base);
+			i /= base;
+		}
+		return result;
+	}
 }
 
 void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
@@ -198,7 +213,7 @@ void VulkanEngine::SetViewportSize(const uint32_t width, const uint32_t height)
 }
 
 
-void VulkanEngine::DrawFrame(const bool dispatchCompute)
+void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchCompute)
 {
 	FrameData& frame = GetCurrentFrame();
 	vkWaitForFences(m_Device, 1, &frame.RenderFence, VK_TRUE, UINT64_MAX);
@@ -230,35 +245,22 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 
 	if (dispatchCompute)
 	{
-
-		if (m_FrameNumber > 0) 
+		if (m_FrameNumber > 0)
 		{
-			TransitionImage(
-				cmd,
-				m_HDRImage.Image,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				VK_IMAGE_LAYOUT_GENERAL,
-				m_MipLevels
-			);
-
+			TransitionImage(cmd, m_HDRImage.Image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, m_MipLevels);
 			TransitionImage(cmd, m_LDRImage.Image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
 		}
 
-		const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
-		const Shader& toneMappingShader = m_Shaders.at(ShaderName::TONE_MAPPING);
-
-		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 0);
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, rtShader.Pipeline);
-		vkCmdBindDescriptorSets(
-			cmd,
-			VK_PIPELINE_BIND_POINT_COMPUTE,
-			rtShader.PipelineLayout,
-			0, 1, &rtShader.DescriptorSet,
-			0, nullptr
-		);
 		uint32_t gx = (m_ViewportWidth + 15) / 16;
 		uint32_t gy = (m_ViewportHeight + 15) / 16;
-		vkCmdDispatch(cmd, gx, gy, 1);
+
+		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 0);
+		
+		RayTrace(cmd, gx, gy);
+
+		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+
+		TAA(cmd, gx, gy, motionVector);
 
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
@@ -270,15 +272,7 @@ void VulkanEngine::DrawFrame(const bool dispatchCompute)
 
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, toneMappingShader.Pipeline);
-		vkCmdBindDescriptorSets(
-			cmd,
-			VK_PIPELINE_BIND_POINT_COMPUTE,
-			toneMappingShader.PipelineLayout,
-			0, 1, &toneMappingShader.DescriptorSet,
-			0, nullptr
-		);
-		vkCmdDispatch(cmd, gx, gy, 1);
+		ToneMap(cmd, gx, gy);
 
 		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 1);
 
@@ -704,6 +698,43 @@ void VulkanEngine::UpdateDescriptorSets(const Shader& shader) const
 
 	vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(descriptorWrites.size()),
 		descriptorWrites.data(), 0, nullptr);
+}
+
+void VulkanEngine::RayTrace(VkCommandBuffer cmd, uint32_t gx, uint32_t gy)
+{
+	const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, rtShader.Pipeline);
+	vkCmdBindDescriptorSets(
+		cmd,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		rtShader.PipelineLayout,
+		0, 1, &rtShader.DescriptorSet,
+		0, nullptr
+	);
+	vkCmdDispatch(cmd, gx, gy, 1);
+}
+
+void VulkanEngine::ToneMap(VkCommandBuffer cmd, uint32_t gx, uint32_t gy)
+{
+	const Shader& toneMappingShader = m_Shaders.at(ShaderName::TONE_MAPPING);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, toneMappingShader.Pipeline);
+	vkCmdBindDescriptorSets(
+		cmd,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		toneMappingShader.PipelineLayout,
+		0, 1, &toneMappingShader.DescriptorSet,
+		0, nullptr
+	);
+	vkCmdDispatch(cmd, gx, gy, 1);
+}
+
+void VulkanEngine::TAA(VkCommandBuffer cmd, uint32_t gx, uint32_t gy, const glm::vec2& motionVector)
+{
+	int frameIndex = m_FrameNumber % 16;
+	float jitterX = (Halton(frameIndex, 2) - 0.5f) / m_ViewportWidth;
+	float jitterY = (Halton(frameIndex, 3) - 0.5f) / m_ViewportHeight;
 }
 
 void VulkanEngine::Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels)

@@ -40,7 +40,6 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 
 void Renderer::Render()
 {
-
 	if(const auto& scene = m_CurrentScene.lock(); m_DispatchCompute = scene && !IsComplete())
 	{
 		UpdateUniformBuffer(scene);
@@ -51,7 +50,7 @@ void Renderer::Render()
 			++m_SampleCount;
 	}
 
-	m_Engine->DrawFrame(m_DispatchCompute);
+	m_Engine->DrawFrame(glm::vec2(0.0f), m_DispatchCompute);
 }
 
 void Renderer::UpdateUniformBuffer(const std::shared_ptr<Scene>& scene) const
