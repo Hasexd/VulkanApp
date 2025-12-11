@@ -100,8 +100,14 @@ namespace
 
 void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 {
+#ifdef _WIN32
+	m_PathToShaders = std::filesystem::current_path().parent_path() / "shaders";
+#else
+	m_PathToShaders = std::filesystem::current_path().parent_path().parent_path() / "shaders";
+#endif
+
 	m_Window = window;
-	m_FileWatcher = FileWatcher(m_ShadersPath, std::chrono::milliseconds(1500));
+	m_FileWatcher = FileWatcher(m_PathToShaders, std::chrono::milliseconds(1500));
 
 	InitDevices();
 	InitSwapchain();
@@ -128,7 +134,7 @@ void VulkanEngine::ReloadShaders()
 
 	for (const auto& shaderName : m_ChangedShaderFiles)
 	{
-		const std::filesystem::path shaderPath = m_ShadersPath / shaderName;
+		const std::filesystem::path shaderPath = m_PathToShaders / shaderName;
 
 		if (CompileShader(shaderPath))
 		{
@@ -149,12 +155,12 @@ void VulkanEngine::ReloadShaders()
 			const auto& bindings = shader.Bindings;
 			shader.Destroy(m_Device);
 
-			CreateShader(shaderName, bindings, nullptr, std::format("../shaders/compiled/{}.spv", fileName));
+			CreateShader(shaderName, bindings, nullptr, std::format("{}/{}.spv", (m_PathToShaders / "compiled").string(), fileName));
 			UpdateDescriptorSets(m_Shaders[shaderName]);
 		}
 		else
 		{
-			std::println("Compilation failed : {}", m_ShadersPath.stem().string());
+			std::println("Compilation failed : {}", m_PathToShaders.stem().string());
 		}
 	}
 
@@ -530,7 +536,7 @@ void VulkanEngine::InitShaders()
 		DescriptorBinding(MaterialBuffer)
 	};
 
-	CreateShader(ShaderName::RAY_TRACING, rtBindings, nullptr, "../shaders/compiled/ray_tracing.spv");
+	CreateShader(ShaderName::RAY_TRACING, rtBindings, nullptr, (m_PathToShaders / "compiled" / "ray_tracing.spv").string());
 
 	const std::vector<DescriptorBinding> toneMappingBindings =
 	{
@@ -538,7 +544,7 @@ void VulkanEngine::InitShaders()
 		DescriptorBinding(m_LDRImage)
 	};
 
-	CreateShader(ShaderName::TONE_MAPPING, toneMappingBindings, nullptr, "../shaders/compiled/tone_mapping.spv");
+	CreateShader(ShaderName::TONE_MAPPING, toneMappingBindings, nullptr, (m_PathToShaders / "compiled" / "tone_mapping.spv").string());
 
 	const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
 	const Shader& toneMappingShader = m_Shaders.at(ShaderName::TONE_MAPPING);
@@ -978,7 +984,7 @@ void VulkanEngine::InitMitmapsResources()
 		brightPassPushConstant.size = sizeof(int);
 		brightPassPushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-		CreateShader(ShaderName::DOWNSAMPLE, downsampleBindings, &brightPassPushConstant, "../shaders/compiled/downsample.spv");
+		CreateShader(ShaderName::DOWNSAMPLE, downsampleBindings, &brightPassPushConstant, (m_PathToShaders / "compiled" / "downsample.spv").string());
 	}
 
 	downsampleShader = &m_Shaders.at(ShaderName::DOWNSAMPLE);
@@ -998,7 +1004,7 @@ void VulkanEngine::InitMitmapsResources()
 			DescriptorBinding(dmmyDst)
 		};
 
-		CreateShader(ShaderName::UPSAMPLE, upsampleBindings, nullptr, "../shaders/compiled/upsample.spv");
+		CreateShader(ShaderName::UPSAMPLE, upsampleBindings, nullptr, (m_PathToShaders / "compiled" / "upsample.spv").string());
 	}
 
 	m_MipmapImageViews.resize(m_MipLevels);

@@ -146,7 +146,7 @@ private:
 
 	std::vector<std::string> m_ChangedShaderFiles;
 	std::atomic<bool> m_ShadersNeedReload = false;
-	std::filesystem::path m_ShadersPath = std::filesystem::current_path().parent_path() / "shaders";
-
 	glm::mat4 m_ProjectionMatrix = glm::mat4(0.0f);
+
+	std::filesystem::path m_PathToShaders;
 };

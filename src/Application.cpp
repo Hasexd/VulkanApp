@@ -346,12 +346,13 @@ void Application::HandleCursorInput()
 
 void Application::Init(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized)
 {
+	glfwSetErrorCallback(ErrorCallback);
+
 	if (!glfwInit())
 	{
 		std::println("Couldn't initialize GLFW");
 		return;
 	}
-	glfwSetErrorCallback(ErrorCallback);
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, resizable);
 	glfwWindowHint(GLFW_MAXIMIZED, maximized);
@@ -388,8 +389,12 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 void Application::LoadJSONScenes()
 {
 	using json = nlohmann::json;
-	std::filesystem::path path = "../scenes";
 
+#ifdef _WIN32
+	std::filesystem::path path = "../scenes";
+#else
+	std::filesystem::path path = std::filesystem::current_path().parent_path().parent_path() / "scenes";
+#endif
 	for (const auto& file : std::filesystem::directory_iterator(path))
 	{
 		if (file.path().extension().string() == ".json")
