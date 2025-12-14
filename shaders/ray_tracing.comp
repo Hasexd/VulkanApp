@@ -230,97 +230,107 @@ HitPayload TraceRay(const Ray ray)
 vec4 RayGen(vec2 coord, uint sampleCount)
 {
     const float scalar = tan(radians(ubo.FieldOfView) / 2);
-    vec3 rayDirection = vec3(
-    coord.x * ubo.AspectRatio * scalar,
-    coord.y * scalar,
-    -1.0);
 
-    rayDirection = normalize(rayDirection.x * ubo.CameraRightVector + 
-    rayDirection.y * ubo.CameraUpVector + 
-    rayDirection.z * ubo.CameraFrontVector);
-
-    Ray ray;
-    ray.Origin = ubo.CameraPosition;
-    ray.Direction = rayDirection;
-
-    vec3 light = vec3(0.0);
-    vec3 throughput = vec3(1.0);
+    vec3 totalLight = vec3(0.0);
 
     uint seed = uint((coord.x * 1000000.0) + (coord.y * 1000000.0) + 
                      ubo.Width + sampleCount * 982451653u);
 
-    for(uint i = 0; i < ubo.MaxBounces; i++)
+    const uint raysPerPixel = 4;
+
+    for(uint rayNum = 0; rayNum < raysPerPixel; rayNum++)
     {
-        seed += i;
+        vec2 jitter = vec2(RandomFloat(seed), RandomFloat(seed)) - 0.5;
+        vec2 jitteredCoord = coord + jitter / vec2(ubo.Width, ubo.Height);
 
-        const HitPayload hit = TraceRay(ray);
+        vec3 rayDirection = vec3(
+            jitteredCoord.x * ubo.AspectRatio * scalar,
+            jitteredCoord.y * scalar,
+            -1.0);
+        rayDirection = normalize(rayDirection.x * ubo.CameraRightVector + 
+                                rayDirection.y * ubo.CameraUpVector + 
+                                rayDirection.z * ubo.CameraFrontVector);
+        
+        Ray ray;
+        ray.Origin = ubo.CameraPosition;
+        ray.Direction = rayDirection;
 
-        if(hit.HitDistance >= EPSILON)
+        vec3 light = vec3(0.0);
+        vec3 throughput = vec3(1.0);
+
+        for(uint i = 0; i < ubo.MaxBounces; i++)
         {
-            const Material material = Materials[Spheres[hit.ObjectIndex].MaterialIndex];
+            seed += i;
 
-            light += (material.Color * material.EmissionPower) * throughput;
+            const HitPayload hit = TraceRay(ray);
 
-            if(material.EmissionPower > 0.0)
-                break;
-
-            vec3 normal = hit.WorldNormal;
-            vec3 viewDir = -ray.Direction;
-
-            vec3 f0 = mix(vec3(material.Specular), material.Color, material.Metallic);
-
-            float cosTheta = max(dot(normal, viewDir), 0.0);
-            float fresnel = FresnelSchlick(cosTheta, material.Specular);
-
-            float specularChance = mix(fresnel, 1.0, material.Metallic);
-
-            bool isSpecular = RandomFloat(seed) < specularChance;
-
-            vec3 newDirection;
-
-            if(isSpecular)
+            if(hit.HitDistance >= EPSILON)
             {
-                vec3 halfVector = SampleGGX(normal, material.Roughness, seed);
-                newDirection = reflect(-viewDir, halfVector);
+                const Material material = Materials[Spheres[hit.ObjectIndex].MaterialIndex];
 
-                if(dot(newDirection, normal) <= 0.0)
+                light += (material.Color * material.EmissionPower) * throughput;
+
+                if(material.EmissionPower > 0.0)
+                    break;
+
+                vec3 normal = hit.WorldNormal;
+                vec3 viewDir = -ray.Direction;
+
+                vec3 f0 = mix(vec3(material.Specular), material.Color, material.Metallic);
+
+                float cosTheta = max(dot(normal, viewDir), 0.0);
+                float fresnel = FresnelSchlick(cosTheta, material.Specular);
+
+                float specularChance = mix(fresnel, 1.0, material.Metallic);
+
+                bool isSpecular = RandomFloat(seed) < specularChance;
+
+                vec3 newDirection;
+
+                if(isSpecular)
+                {
+                    vec3 halfVector = SampleGGX(normal, material.Roughness, seed);
+                    newDirection = reflect(-viewDir, halfVector);
+
+                    if(dot(newDirection, normal) <= 0.0)
+                    {
+                        newDirection = CosineWeightedHemisphere(normal, seed);
+                        isSpecular = false;
+                    }
+                }
+                else 
                 {
                     newDirection = CosineWeightedHemisphere(normal, seed);
-                    isSpecular = false;
                 }
-                
+
+                if(isSpecular)
+                {
+                    vec3 h = normalize(viewDir + newDirection);
+                    float voh = max(dot(viewDir, h), 0.0);
+                    vec3 f = FresnelSchlickVec3(voh, f0);
+
+                    throughput *= f / max(specularChance, 0.001);
+                }
+                else 
+                {
+                    vec3 diffuseColor = material.Color * (1.0 - material.Metallic);
+                    throughput *= diffuseColor / max(1.0 - specularChance, 0.001);
+                }
+
+
+                ray.Origin = hit.WorldPosition + normal * EPSILON;
+                ray.Direction = normalize(newDirection);
             }
-            else 
+            else
             {
-                newDirection = CosineWeightedHemisphere(normal, seed);
+                light += ubo.BackgroundColor * throughput;
+                break;
             }
-
-            if(isSpecular)
-            {
-                vec3 h = normalize(viewDir + newDirection);
-                float voh = max(dot(viewDir, h), 0.0);
-                vec3 f = FresnelSchlickVec3(voh, f0);
-
-                throughput *= f / max(specularChance, 0.001);
-            }
-            else 
-            {
-                vec3 diffuseColor = material.Color * (1.0 - material.Metallic);
-                throughput *= diffuseColor / max(1.0 - specularChance, 0.001);
-            }
-
-
-            ray.Origin = hit.WorldPosition + normal * EPSILON;
-            ray.Direction = normalize(newDirection);
         }
-        else
-        {
-            light += ubo.BackgroundColor * throughput;
-            break;
-        }
+        totalLight += light;
     }
 
-   return vec4(light, 1.0);
+   return vec4(totalLight / float(raysPerPixel), 1.0);
 }
 
 

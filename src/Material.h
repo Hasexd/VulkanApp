@@ -10,5 +10,5 @@ struct Material
 	float Specular = 0.0f;
 	float EmissionPower = 0.f;
 
-	[[nodiscard]] bool IsEmissive() const { return EmissionPower > 0.f; }
+	[[nodiscard]] bool IsEmissive() const { return EmissionPower > 0.0f; }
 };

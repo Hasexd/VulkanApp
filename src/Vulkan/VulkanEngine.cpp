@@ -269,9 +269,11 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 	}
 
 	VkCommandBuffer cmd = frame.MainCommandBuffer;
-	vkResetCommandBuffer(cmd, 0);
-	VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	VkCommandBufferBeginInfo bi = {};
+	bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkResetCommandBuffer(cmd, 0);
 	vkBeginCommandBuffer(cmd, &bi);
 	vkCmdResetQueryPool(cmd, frame.TimestampQueryPool, 0, 2);
 
@@ -302,7 +304,6 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
 			Upsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
-
 		}
 		
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
@@ -382,7 +383,7 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 
 	if (m_ShouldRecreateSwapchain)
 	{
-		int w, h;
+		int w = 0, h = 0;
 		glfwGetWindowSize(m_Window.get(), &w, &h);
 		RecreateSwapchain(w, h);
 		m_ShouldRecreateSwapchain = false;
@@ -441,6 +442,7 @@ void VulkanEngine::UpdateTimings()
 {
 	FrameData& frame = GetCurrentFrame();
 	std::array<uint64_t, 2> timestamps = {};
+
 	VkResult result = vkGetQueryPoolResults(m_Device, frame.TimestampQueryPool, 0, 2,
 		sizeof(timestamps), timestamps.data(), sizeof(uint64_t),
 		VK_QUERY_RESULT_64_BIT);
@@ -465,16 +467,15 @@ void VulkanEngine::DrawImGui(const VkCommandBuffer cmd, const VkImageView target
 		return;
 	}
 
-	VkRenderingAttachmentInfo colorAttachmentInfo{};
-	colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO; VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	VkRenderingAttachmentInfo colorAttachmentInfo = {};
+	colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 	colorAttachmentInfo.pNext = nullptr;
 	colorAttachmentInfo.imageView = targetImageView;
 	colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
-	VkRenderingInfo renderInfo{};
+	VkRenderingInfo renderInfo = {};
 	renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
 	renderInfo.pNext = nullptr;
 
@@ -772,7 +773,7 @@ void VulkanEngine::Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, i
 {
 	Shader& upsampleShader = m_Shaders[ShaderName::UPSAMPLE];
 
-	VkImageMemoryBarrier barrier{};
+	VkImageMemoryBarrier barrier = {};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	barrier.image = image;
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -781,7 +782,6 @@ void VulkanEngine::Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, i
 	barrier.subresourceRange.baseArrayLayer = 0;
 	barrier.subresourceRange.layerCount = 1;
 	barrier.subresourceRange.levelCount = 1;
-
 
 	for (int32_t mip = mipLevels - 2; mip >= 0; mip--)
 	{
@@ -828,7 +828,7 @@ void VulkanEngine::Downsample(VkCommandBuffer cmd, VkImage image, int32_t width,
 {
 	Shader& downsampleShader = m_Shaders[ShaderName::DOWNSAMPLE];
 
-	VkImageMemoryBarrier barrier{};
+	VkImageMemoryBarrier barrier = {};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	barrier.image = image;
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;

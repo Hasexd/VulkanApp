@@ -146,11 +146,9 @@ private:
 
 	std::vector<std::string> m_ChangedShaderFiles;
 	std::atomic<bool> m_ShadersNeedReload = false;
-	glm::mat4 m_ProjectionMatrix = glm::mat4(0.0f);
 
 	std::filesystem::path m_PathToShaders;
 
 	bool m_BloomEnabled = true;
-
 	bool m_ShouldRecreateSwapchain = false;
 };
