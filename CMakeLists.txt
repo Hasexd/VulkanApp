@@ -19,6 +19,12 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
 find_package(Vulkan REQUIRED)
 
 add_library(GLFW STATIC)
@@ -130,8 +136,8 @@ target_compile_options(VulkanRayTracer PRIVATE
 
 if(MSVC)
     target_compile_options(VulkanRayTracer PRIVATE
-            $<$<CONFIG:Debug>:/MTd /Zi /Od>
-            $<$<CONFIG:Release>:/MT /O2>
+            $<$<CONFIG:Debug>:/Zi /Od>
+            $<$<CONFIG:Release>:/O2>
     )
     target_compile_options(VulkanRayTracer PRIVATE /MP)
 endif()

@@ -101,7 +101,7 @@ namespace
 void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 {
 #ifdef _WIN32
-	m_PathToShaders = std::filesystem::current_path().parent_path() / "shaders";
+	m_PathToShaders = std::filesystem::current_path().parent_path().parent_path().parent_path().parent_path() / "shaders";
 #else
 	m_PathToShaders = std::filesystem::current_path().parent_path().parent_path() / "shaders";
 #endif
@@ -225,14 +225,18 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 	vkWaitForFences(m_Device, 1, &frame.RenderFence, VK_TRUE, UINT64_MAX);
 	vkDeviceWaitIdle(m_Device);
 
-	if (m_FrameNumber > 0)
-		UpdateTimings();
+	int width = 0, height = 0;
+
+	glfwGetWindowSize(m_Window.get(), &width, &height);
+
+	if(width == 0 || height == 0)
+		return;
 
 	frame.DataDeletionQueue.Flush();
 	vkResetFences(m_Device, 1, &frame.RenderFence);
 
 	uint32_t swapchainImageIndex = 0;
-	vkAcquireNextImageKHR(
+	VkResult acquireResult = vkAcquireNextImageKHR(
 		m_Device,
 		m_Swapchain,
 		UINT64_MAX,
@@ -241,16 +245,41 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 		&swapchainImageIndex
 	);
 
+	if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		RecreateSwapchain(width, height);
+		return;
+	}
+
+	if (acquireResult == VK_SUBOPTIMAL_KHR)
+	{
+		m_ShouldRecreateSwapchain = true;
+	}
+
+	if (acquireResult != VK_SUCCESS)
+	{
+		std::println("Failed to acquire swapchain image: {}", static_cast<int>(acquireResult));
+		return;
+	}
+	
+	if (swapchainImageIndex >= m_SwapchainImageViews.size())
+	{
+		std::println("Invalid swapchain image index: {}", swapchainImageIndex);
+		return;
+	}
+
 	VkCommandBuffer cmd = frame.MainCommandBuffer;
 	vkResetCommandBuffer(cmd, 0);
 	VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(cmd, &bi);
-	vkCmdResetQueryPool(cmd, m_TimestampQueryPool, 0, 4);
-	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_TimestampQueryPool, 2);
+	vkCmdResetQueryPool(cmd, frame.TimestampQueryPool, 0, 2);
 
 	if (dispatchCompute)
 	{
+		if (m_FrameNumber > m_Frames.size())
+			UpdateTimings();
+
 		if (m_FrameNumber > 0)
 		{
 			TransitionImage(cmd, m_HDRImage.Image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, m_MipLevels);
@@ -260,23 +289,27 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 		uint32_t gx = (m_ViewportWidth + 15) / 16;
 		uint32_t gy = (m_ViewportHeight + 15) / 16;
 
-		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 0);
+		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, frame.TimestampQueryPool, 0);
 		
 		RayTrace(cmd, gx, gy);
 
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+		if (m_BloomEnabled)
+		{
+			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
-		Downsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
+			Downsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
 
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
-		Upsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
+			Upsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
 
+		}
+		
 		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
 		ToneMap(cmd, gx, gy);
 
-		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, m_TimestampQueryPool, 1);
+		vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, frame.TimestampQueryPool, 1);
 
 		TransitionImage(
 			cmd,
@@ -312,8 +345,6 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 		1
 	);
-
-	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_TimestampQueryPool, 3);
 	vkEndCommandBuffer(cmd);
 
 	VkSemaphoreSubmitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
@@ -348,6 +379,14 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 	vkQueuePresentKHR(m_GraphicsQueue, &pinfo);
 
 	m_FrameNumber++;
+
+	if (m_ShouldRecreateSwapchain)
+	{
+		int w, h;
+		glfwGetWindowSize(m_Window.get(), &w, &h);
+		RecreateSwapchain(w, h);
+		m_ShouldRecreateSwapchain = false;
+	}
 }
 
 void VulkanEngine::RecreateRenderTargets()
@@ -400,9 +439,10 @@ void VulkanEngine::RecreateRenderTargets()
 
 void VulkanEngine::UpdateTimings()
 {
-	uint64_t timestamps[4];
-	VkResult result = vkGetQueryPoolResults(m_Device, m_TimestampQueryPool, 0, 4,
-		sizeof(timestamps), timestamps, sizeof(uint64_t),
+	FrameData& frame = GetCurrentFrame();
+	std::array<uint64_t, 2> timestamps = {};
+	VkResult result = vkGetQueryPoolResults(m_Device, frame.TimestampQueryPool, 0, 2,
+		sizeof(timestamps), timestamps.data(), sizeof(uint64_t),
 		VK_QUERY_RESULT_64_BIT);
 
 	if (result == VK_SUCCESS)
@@ -410,27 +450,21 @@ void VulkanEngine::UpdateTimings()
 		VkPhysicalDeviceProperties props;
 		vkGetPhysicalDeviceProperties(m_PhysicalDevice, &props);
 
-		if (timestamps[1] > timestamps[0]) 
-		{ 
-			uint64_t rayTracingElapsed = timestamps[1] - timestamps[0];
-			float rayTracingMs = rayTracingElapsed * props.limits.timestampPeriod / 1000000.0f;
+		uint64_t rayTracingElapsed = std::fabs(timestamps[1] - timestamps[0]);
+		float rayTracingMs = rayTracingElapsed * props.limits.timestampPeriod / 1000000.0f;
 
-			m_RenderTime.RayTracingTime = rayTracingMs;
-		}
-		else
-		{
-			m_RenderTime.RayTracingTime = 0.0f;
-		}
-
-		uint64_t fullFrameElapsed = timestamps[3] - timestamps[2];
-		float fullFrameMs = fullFrameElapsed * props.limits.timestampPeriod / 1000000.0f;
-
-		m_RenderTime.FullScreenTime = fullFrameMs;
+		m_RenderTime = rayTracingMs;
 	}
 }
 
 void VulkanEngine::DrawImGui(const VkCommandBuffer cmd, const VkImageView targetImageView) const
 {
+	if (targetImageView == VK_NULL_HANDLE)
+	{
+		std::println("Invalid target image view for ImGui rendering.");
+		return;
+	}
+
 	VkRenderingAttachmentInfo colorAttachmentInfo{};
 	colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO; VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -458,8 +492,10 @@ void VulkanEngine::DrawImGui(const VkCommandBuffer cmd, const VkImageView target
 
 void VulkanEngine::RecreateSwapchain(uint32_t width, uint32_t height)
 {
+	vkDeviceWaitIdle(m_Device);
 	DestroySwapchain();
 	CreateSwapchain(width, height);
+	ResetAccumulation();
 }
 
 void VulkanEngine::InitImGui()
@@ -1219,6 +1255,7 @@ void VulkanEngine::InitDevices()
 	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing = true;
+	features12.hostQueryReset = true;
 
 
 	vkb::PhysicalDeviceSelector selector(vkbInstance);
@@ -1377,9 +1414,13 @@ void VulkanEngine::CreateTimestampQueryPool()
 	VkQueryPoolCreateInfo queryPoolInfo{};
 	queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
 	queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-	queryPoolInfo.queryCount = 4;
+	queryPoolInfo.queryCount = 2;
 
-	vkCreateQueryPool(m_Device, &queryPoolInfo, nullptr, &m_TimestampQueryPool);
+	for (auto& frame : m_Frames)
+	{
+		vkCreateQueryPool(m_Device, &queryPoolInfo, nullptr, &frame.TimestampQueryPool);
+		vkResetQueryPool(m_Device, frame.TimestampQueryPool, 0, 2);
+	}
 }
 
 FrameData& VulkanEngine::GetCurrentFrame()
@@ -1443,7 +1484,6 @@ void VulkanEngine::Cleanup()
 		vkDeviceWaitIdle(m_Device);
 
 		vkDestroySampler(m_Device, m_RenderSampler, nullptr);
-		vkDestroyQueryPool(m_Device, m_TimestampQueryPool, nullptr);
 
 		for (const auto& shader : m_Shaders)
 		{
@@ -1456,6 +1496,7 @@ void VulkanEngine::Cleanup()
 			vkDestroyFence(m_Device, frame.RenderFence, nullptr);
 			vkDestroySemaphore(m_Device, frame.RenderSemaphore, nullptr);
 			vkDestroySemaphore(m_Device, frame.SwapchainSemaphore, nullptr);
+			vkDestroyQueryPool(m_Device, frame.TimestampQueryPool, nullptr);
 		}
 
 		vmaDestroyBuffer(m_Allocator, UniformBuffer.Buffer, UniformBuffer.Allocation);
@@ -1510,4 +1551,6 @@ void VulkanEngine::DestroySwapchain()
 	{
 		vkDestroyImageView(m_Device, swapchainImageView, nullptr);
 	}
+	m_SwapchainImageViews.clear();
+	m_SwapchainImages.clear();
 }

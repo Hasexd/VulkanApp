@@ -172,7 +172,7 @@ void Application::DrawImGui()
 
 
 		ImGui::Begin("Information");
-		ImGui::Text("Rendering the frame took: %.3fms", m_Renderer->GetRenderTime().RayTracingTime);
+		ImGui::Text("Rendering the frame took: %.3fms", m_Renderer->GetRenderTime());
 
 		ImGui::Separator();
 		ImGui::Text("Render Settings");
@@ -188,6 +188,11 @@ void Application::DrawImGui()
 			{
 				m_Renderer->ResetAccumulation();
 			}
+		}
+
+		if (ImGui::Checkbox("Bloom enabled", &m_BloomEnabled))
+		{
+			m_Renderer->SetBloomEnabled(m_BloomEnabled);
 		}
 
 		ImGui::InputScalar("Amount of samples", ImGuiDataType_U32, &m_Renderer->GetMaxSamples());
@@ -391,7 +396,7 @@ void Application::LoadJSONScenes()
 	using json = nlohmann::json;
 
 #ifdef _WIN32
-	std::filesystem::path path = "../scenes";
+	std::filesystem::path path = std::filesystem::current_path().parent_path().parent_path().parent_path().parent_path() / "scenes";
 #else
 	std::filesystem::path path = std::filesystem::current_path().parent_path().parent_path() / "scenes";
 #endif

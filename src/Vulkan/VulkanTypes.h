@@ -45,6 +45,8 @@ struct FrameData
 	VkSemaphore RenderSemaphore;
 	VkFence RenderFence;
 
+	VkQueryPool TimestampQueryPool;
+
 	DeletionQueue DataDeletionQueue;
 };
 
@@ -95,12 +97,6 @@ struct MaterialBufferData
 	float Metallic;
 	float Specular;
 	float EmissionPower;
-};
-
-struct RenderTime
-{
-	float RayTracingTime = 0.0f;
-	float FullScreenTime = 0.0f;
 };
 
 struct DescriptorBinding

@@ -48,8 +48,10 @@ public:
 	uint32_t GetMaxSamples() const { return m_MaxSamples; }
 	uint32_t& GetMaxSamples() { return m_MaxSamples; }
 
-	const RenderTime& GetRenderTime() const { return m_Engine->GetRenderTime(); }
+	float GetRenderTime() const { return m_Engine->GetRenderTime(); }
 	ImTextureID GetRenderTextureID() const { return m_Engine->GetRenderTextureID(); }
+
+	void SetBloomEnabled(bool enabled) { m_Engine->SetBloomEnabled(enabled); }
 
 	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
 private:

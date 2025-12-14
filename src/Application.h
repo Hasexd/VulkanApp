@@ -56,6 +56,8 @@ private:
 	bool m_ViewportHovered = false;
 	bool m_ShaderReloadRequested = false;
 
+	bool m_BloomEnabled = true;
+
 	uint32_t m_ViewportWidth;
 	uint32_t m_ViewportHeight;
 

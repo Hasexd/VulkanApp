@@ -37,10 +37,11 @@ public:
 
 	[[nodiscard]] ImTextureID GetRenderTextureID() const { return m_RenderTextureData.GetTexID(); }
 	[[nodiscard]] VmaAllocator GetAllocator() const { return m_Allocator; }
-	[[nodiscard]] const RenderTime& GetRenderTime() const { return m_RenderTime; }
+	[[nodiscard]] float GetRenderTime() const { return m_RenderTime; }
+
+	void SetBloomEnabled(bool enabled) { m_BloomEnabled = enabled; }
 
 	void ResetAccumulation() const;
-
 	void Cleanup();
 public:
 	bool IsInitialized = false;
@@ -136,8 +137,7 @@ private:
 	ImTextureData m_RenderTextureData;
 	VkSampler m_RenderSampler;
 
-	RenderTime m_RenderTime;
-	VkQueryPool m_TimestampQueryPool;
+	float m_RenderTime;
 
 	DeletionQueue m_MainDeletionQueue;
 
@@ -149,4 +149,8 @@ private:
 	glm::mat4 m_ProjectionMatrix = glm::mat4(0.0f);
 
 	std::filesystem::path m_PathToShaders;
+
+	bool m_BloomEnabled = true;
+
+	bool m_ShouldRecreateSwapchain = false;
 };
