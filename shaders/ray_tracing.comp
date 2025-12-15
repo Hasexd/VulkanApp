@@ -32,7 +32,7 @@ struct HitPayload
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(binding = 0, rgba16f) writeonly uniform image2D OutputImage;
+layout(binding = 0, rgba16f) writeonly uniform image2D HDRImage;
 layout(binding = 1, rgba32f) uniform image2D AccumulationImage;
 
 
@@ -247,6 +247,7 @@ vec4 RayGen(vec2 coord, uint sampleCount)
             jitteredCoord.x * ubo.AspectRatio * scalar,
             jitteredCoord.y * scalar,
             -1.0);
+
         rayDirection = normalize(rayDirection.x * ubo.CameraRightVector + 
                                 rayDirection.y * ubo.CameraUpVector + 
                                 rayDirection.z * ubo.CameraFrontVector);
@@ -337,7 +338,7 @@ vec4 RayGen(vec2 coord, uint sampleCount)
 void main() 
 {
     ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
-    vec2 imageSize = vec2(imageSize(OutputImage));
+    vec2 imageSize = vec2(imageSize(HDRImage));
     vec2 coord = (vec2(pixelCoord) / imageSize) * 2.0 - 1.0;
     coord.y = -coord.y;
 
@@ -350,10 +351,10 @@ void main()
         imageStore(AccumulationImage, pixelCoord, newAccum);
 
         vec4 avg = newAccum / float(ubo.SampleCount);
-        imageStore(OutputImage, pixelCoord, avg);
+        imageStore(HDRImage, pixelCoord, avg);
     }
     else 
     {
-        imageStore(OutputImage, pixelCoord, color);
+        imageStore(HDRImage, pixelCoord, color);
     }
 }
