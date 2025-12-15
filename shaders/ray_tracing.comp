@@ -150,15 +150,15 @@ bool IntersectSphere(Ray ray, Sphere sphere, out vec3 outHitNear, out vec3 outHi
    vec3 oc = ray.Origin - sphere.Position;
 
 	float a = dot(ray.Direction, ray.Direction);
-	float b = 2.f * dot(oc, ray.Direction);
+	float b = 2.0 * dot(oc, ray.Direction);
 	float c = dot(oc, oc) - sphere.Radius * sphere.Radius;
 
-	float discriminant = b * b - 4.f * a * c;
+	float discriminant = b * b - 4.0 * a * c;
 
-	if (discriminant >= 0.f)
+	if (discriminant >= 0.0)
 	{
-		float t1 = (-b - sqrt(discriminant)) / (2 * a);
-		float t2 = (-b + sqrt(discriminant)) / (2 * a);
+		float t1 = (-b - sqrt(discriminant)) / (2.0 * a);
+		float t2 = (-b + sqrt(discriminant)) / (2.0 * a);
 
         outHitNear = ray.Origin + ray.Direction * t1;
 		outHitFar = ray.Origin + ray.Direction * t2;

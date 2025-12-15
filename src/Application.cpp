@@ -6,6 +6,16 @@ namespace
 	{
 		std::println("Error: {}\n", description);
 	}
+
+	LUTType StringToLutType(const std::string& string)
+	{
+		if (string == "CINEMATIC")
+			return LUTType::CINEMATIC;
+		else if (string == "DAY - NIGHT")
+			return LUTType::DAY_NIGHT;
+		else
+			return LUTType::NONE;
+	}
 }
 
 Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized, const std::string& defaultScene) :
@@ -193,6 +203,30 @@ void Application::DrawImGui()
 		if (ImGui::Checkbox("Bloom enabled", &m_BloomEnabled))
 		{
 			m_Renderer->SetBloomEnabled(m_BloomEnabled);
+		}
+
+		if (ImGui::Checkbox("Color grading enabled", &m_ColorGradingEnabled))
+		{
+			m_Renderer->SetColorGradingEnabled(m_ColorGradingEnabled);
+		}
+
+		if (m_ColorGradingEnabled)
+		{
+			const char* lutOptions[] = { "NONE", "CINEMATIC", "DAY - NIGHT" };
+			static int currentLutIndex = 1;
+			if (ImGui::Combo("LUTs", &currentLutIndex, lutOptions, IM_ARRAYSIZE(lutOptions)))
+			{
+				std::string selectedLut = lutOptions[currentLutIndex];
+				if (selectedLut == "NONE")
+				{
+					m_ColorGradingEnabled = false;
+					m_Renderer->SetColorGradingEnabled(false);
+				}
+				else
+				{
+					m_Renderer->SwitchLuts(StringToLutType(lutOptions[currentLutIndex]));
+				}
+			}
 		}
 
 		ImGui::InputScalar("Amount of samples", ImGuiDataType_U32, &m_Renderer->GetMaxSamples());

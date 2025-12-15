@@ -14,7 +14,15 @@ enum class ShaderName : uint8_t
 	RAY_TRACING,
 	DOWNSAMPLE,
 	UPSAMPLE,
-	TONE_MAPPING
+	TONE_MAPPING,
+	COLOR_GRADING
+};
+
+enum class LUTType : uint8_t
+{
+	NONE,
+	CINEMATIC,
+	DAY_NIGHT
 };
 
 struct DeletionQueue

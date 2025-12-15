@@ -146,21 +146,34 @@ set_target_properties(VulkanRayTracer PROPERTIES
         DEBUG_POSTFIX "_d"
 )
 
+find_program(GLSLANG glslangValidator HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
+
+if(NOT GLSLANG)
+    message(FATAL_ERROR "Could not find glslangValidator. Make sure Vulkan SDK is installed.")
+endif()
+
+message(STATUS "Using glslangValidator: ${GLSLANG}")
+
 file(GLOB SHADER_SOURCES
-    shaders/*.comp
-    shaders/*.vert
-    shaders/*.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.comp
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.vert
+    ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.frag
 )
 
-find_program(GLSLANG glslang REQUIRED)
+message(STATUS "Found these shaders:")
+foreach(SHADER ${SHADER_SOURCES})
+    message(STATUS "  - ${SHADER}")
+endforeach()
+
+set(SHADER_OUTPUTS "")
 
 foreach(SHADER ${SHADER_SOURCES})
-    get_filename_component(SHADER_NAME ${SHADER} NAME)
-    set(SHADER_OUTPUT ${CMAKE_SOURCE_DIR}/shaders/compiled/${SHADER_NAME}.spv)
+    get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+    set(SHADER_OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compiled/${SHADER_NAME}.spv)
     
     add_custom_command(
         OUTPUT ${SHADER_OUTPUT}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/shaders/compiled
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compiled
         COMMAND ${GLSLANG} -V ${SHADER} -o ${SHADER_OUTPUT}
         DEPENDS ${SHADER}
         COMMENT "Compiling shader: ${SHADER_NAME}"

@@ -16,8 +16,6 @@ void main()
 {
     ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
     vec2 imageSize = vec2(imageSize(LDRImage));
-    vec2 coord = (vec2(pixelCoord) / imageSize) * 2.0 - 1.0;
-    coord.y = -coord.y;
 
     mat3 acesInputMat = mat3(
         0.59719, 0.07600, 0.02840,

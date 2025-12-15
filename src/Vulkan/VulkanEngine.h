@@ -8,6 +8,7 @@
 #include <print>
 #include <fstream>
 #include <future>
+#include <thread>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -40,6 +41,9 @@ public:
 	[[nodiscard]] float GetRenderTime() const { return m_RenderTime; }
 
 	void SetBloomEnabled(bool enabled) { m_BloomEnabled = enabled; }
+	void SetColorGradingEnabled(bool enabled) { m_ColorGradingEnabled = enabled; }
+
+	void SwitchLuts(LUTType type);
 
 	void ResetAccumulation() const;
 	void Cleanup();
@@ -49,29 +53,32 @@ public:
 	AllocatedBuffer SphereBuffer;
 	AllocatedBuffer MaterialBuffer;
 private:
-	[[nodiscard]] AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, uint32_t mipLevels) const;
-	void CreateImageView(AllocatedImage& image, const VkFormat format, uint32_t mipLevels) const;
+	[[nodiscard]] AllocatedImage CreateImage(VkExtent3D size, VkImageType type, VkFormat format, VkImageUsageFlags usage, uint32_t mipLevels) const;
 	[[nodiscard]] AllocatedBuffer CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;
+
+	void CreateImageView(AllocatedImage& image, VkImageViewType type, const VkFormat format, uint32_t mipLevels) const;
 
 	void RecreateSwapchain(uint32_t width, uint32_t height);
 	void RecreateRenderTargets();
+
 	void DrawImGui(VkCommandBuffer cmd, VkImageView targetImageView) const;
+
 	void InitDevices();
 	void InitSwapchain();
 	void InitCommands();
 	void InitSyncStructures();
 	void InitImGui();
 	void InitShaders();
-
 	void InitRenderTargets();
 	void InitBuffers();
-
 	void InitMitmapsResources();
+	void InitLuts();
 
 	void RayTrace(VkCommandBuffer cmd, uint32_t gx, uint32_t gy);
 	void Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
 	void Downsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
 	void ToneMap(VkCommandBuffer cmd, uint32_t gx, uint32_t gy);
+	void ColorGrade(VkCommandBuffer cmd, uint32_t gx, uint32_t gy);
 
 	void UpdateDescriptorSets(const Shader& shader) const;
 
@@ -119,6 +126,8 @@ private:
 	AllocatedImage m_HDRImage;
 	AllocatedImage m_AccumulationImage;
 
+	std::unordered_map<LUTType, AllocatedImage> m_Luts;
+
 	std::vector<VkImageView> m_MipmapImageViews;
 	std::vector<VkDescriptorSet> m_DownsampleDescriptorSets;
 	std::vector<VkDescriptorSet> m_UpsampleDescriptorSets;
@@ -148,7 +157,9 @@ private:
 	std::atomic<bool> m_ShadersNeedReload = false;
 
 	std::filesystem::path m_PathToShaders;
+	std::filesystem::path m_PathToLuts;
 
 	bool m_BloomEnabled = true;
+	bool m_ColorGradingEnabled = true;
 	bool m_ShouldRecreateSwapchain = false;
 };

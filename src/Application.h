@@ -57,6 +57,7 @@ private:
 	bool m_ShaderReloadRequested = false;
 
 	bool m_BloomEnabled = true;
+	bool m_ColorGradingEnabled = true;
 
 	uint32_t m_ViewportWidth;
 	uint32_t m_ViewportHeight;

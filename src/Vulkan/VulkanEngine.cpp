@@ -66,6 +66,8 @@ namespace
 			return ShaderName::UPSAMPLE;
 		if(string == "tone_mapping" || string == "tone_mapping.comp")
 			return ShaderName::TONE_MAPPING;
+		if (string == "color_grading" || string == "color_grading.comp")
+			return ShaderName::COLOR_GRADING;
 
 		return ShaderName::NONE;
 	}
@@ -82,19 +84,26 @@ namespace
 		return std::system(command.c_str()) == 0;
 	}
 
-	float Halton(int index, int base)
+	std::vector<float> LoadLUT(const std::filesystem::path& pathToLut)
 	{
-		float result = 0.0f;
-		float f = 1.0f;
-		int i = index;
+		constexpr uint32_t lutSize = 33;
+		constexpr size_t rowCount = lutSize * lutSize * lutSize;
 
-		while (i > 0)
+		std::ifstream file(pathToLut);
+		assert(file.is_open());
+
+		std::vector<float> lutData(rowCount * 4);
+		std::string line;
+
+		for (size_t row = 0; row < rowCount; row++)
 		{
-			f /= base;
-			result += f * (i % base);
-			i /= base;
+			std::getline(file, line);
+			std::istringstream iss(line);
+			iss >> lutData[row * 4] >> lutData[row * 4 + 1] >> lutData[row * 4 + 2];
+			lutData[row * 4 + 3] = 1.0f;
 		}
-		return result;
+
+		return lutData;
 	}
 }
 
@@ -104,6 +113,12 @@ void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 	m_PathToShaders = std::filesystem::current_path().parent_path().parent_path().parent_path().parent_path() / "shaders";
 #else
 	m_PathToShaders = std::filesystem::current_path().parent_path().parent_path() / "shaders";
+#endif
+
+#ifdef _WIN32
+	m_PathToLuts = std::filesystem::current_path().parent_path().parent_path().parent_path().parent_path() / "luts";
+#else
+	m_PathToLuts = std::filesystem::current_path().parent_path().parent_path() / "luts";
 #endif
 
 	m_Window = window;
@@ -116,6 +131,7 @@ void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 	InitImGui();
 	InitBuffers();
 	InitRenderTargets();
+	InitLuts();
 	InitShaders();
 	CreateTimestampQueryPool();
 
@@ -297,16 +313,14 @@ void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchC
 
 		if (m_BloomEnabled)
 		{
-			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
-
 			Downsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
-
-			vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
-
 			Upsample(cmd, m_HDRImage.Image, m_ViewportWidth, m_ViewportHeight, m_MipLevels);
 		}
-		
-		vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+
+		if (m_ColorGradingEnabled)
+		{
+			ColorGrade(cmd, gx, gy);
+		}
 
 		ToneMap(cmd, gx, gy);
 
@@ -427,6 +441,7 @@ void VulkanEngine::RecreateRenderTargets()
 
 	Shader& rtShader = m_Shaders[ShaderName::RAY_TRACING];
 	Shader& toneMappingShader = m_Shaders[ShaderName::TONE_MAPPING];
+	Shader& cgShader = m_Shaders[ShaderName::COLOR_GRADING];
 
 	rtShader.Bindings[0] = DescriptorBinding(m_HDRImage, m_RenderSampler);
 	rtShader.Bindings[1] = DescriptorBinding(m_AccumulationImage);
@@ -434,8 +449,11 @@ void VulkanEngine::RecreateRenderTargets()
 	toneMappingShader.Bindings[0] = DescriptorBinding(m_HDRImage);
 	toneMappingShader.Bindings[1] = DescriptorBinding(m_LDRImage);
 
+	cgShader.Bindings[1] = DescriptorBinding(m_HDRImage);
+
 	UpdateDescriptorSets(rtShader);
 	UpdateDescriptorSets(toneMappingShader);
+	UpdateDescriptorSets(cgShader);
 }
 
 void VulkanEngine::UpdateTimings()
@@ -583,11 +601,21 @@ void VulkanEngine::InitShaders()
 
 	CreateShader(ShaderName::TONE_MAPPING, toneMappingBindings, nullptr, (m_PathToShaders / "compiled" / "tone_mapping.spv").string());
 
+	const std::vector<DescriptorBinding> colorGradeBindings =
+	{
+		DescriptorBinding(m_Luts.at(LUTType::CINEMATIC), m_RenderSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER),
+		DescriptorBinding(m_HDRImage, m_RenderSampler),
+	};
+
+	CreateShader(ShaderName::COLOR_GRADING, colorGradeBindings, nullptr, (m_PathToShaders / "compiled" / "color_grading.spv").string());
+
 	const Shader& rtShader = m_Shaders.at(ShaderName::RAY_TRACING);
 	const Shader& toneMappingShader = m_Shaders.at(ShaderName::TONE_MAPPING);
+	const Shader& colorGradingShader = m_Shaders.at(ShaderName::COLOR_GRADING);
 
 	UpdateDescriptorSets(rtShader);
 	UpdateDescriptorSets(toneMappingShader);
+	UpdateDescriptorSets(colorGradingShader);
 }
 
 void VulkanEngine::CreateShader(const ShaderName& shaderName,
@@ -749,6 +777,21 @@ void VulkanEngine::RayTrace(VkCommandBuffer cmd, uint32_t gx, uint32_t gy)
 		VK_PIPELINE_BIND_POINT_COMPUTE,
 		rtShader.PipelineLayout,
 		0, 1, &rtShader.DescriptorSet,
+		0, nullptr
+	);
+	vkCmdDispatch(cmd, gx, gy, 1);
+}
+
+void VulkanEngine::ColorGrade(VkCommandBuffer cmd, uint32_t gx, uint32_t gy)
+{
+	const Shader& colorGradingShader = m_Shaders.at(ShaderName::COLOR_GRADING);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, colorGradingShader.Pipeline);
+	vkCmdBindDescriptorSets(
+		cmd,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		colorGradingShader.PipelineLayout,
+		0, 1, &colorGradingShader.DescriptorSet,
 		0, nullptr
 	);
 	vkCmdDispatch(cmd, gx, gy, 1);
@@ -924,30 +967,30 @@ void VulkanEngine::InitRenderTargets()
 		1
 	};
 
-	m_LDRImage = CreateImage(imageExtent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
+	m_LDRImage = CreateImage(imageExtent, VK_IMAGE_TYPE_2D, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 1);
 
 	if (m_LDRImage.ImageView == VK_NULL_HANDLE)
 	{
-		CreateImageView(m_LDRImage, m_LDRImage.ImageFormat, 1);
+		CreateImageView(m_LDRImage, VK_IMAGE_VIEW_TYPE_2D, m_LDRImage.ImageFormat, 1);
 	}
 
 	m_MipLevels = static_cast<uint32_t>(glm::floor(glm::log2(glm::max(width, height)))) + 1;
 
-	m_HDRImage = CreateImage(imageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT |
+	m_HDRImage = CreateImage(imageExtent, VK_IMAGE_TYPE_2D, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, m_MipLevels);
 
 	if (m_HDRImage.ImageView == VK_NULL_HANDLE)
 	{
-		CreateImageView(m_HDRImage, m_HDRImage.ImageFormat, m_MipLevels);
+		CreateImageView(m_HDRImage, VK_IMAGE_VIEW_TYPE_2D, m_HDRImage.ImageFormat, m_MipLevels);
 	}
 
-	m_AccumulationImage = CreateImage(imageExtent, VK_FORMAT_R32G32B32A32_SFLOAT,
+	m_AccumulationImage = CreateImage(imageExtent, VK_IMAGE_TYPE_2D, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 1);
 
 	if (m_AccumulationImage.ImageView == VK_NULL_HANDLE)
 	{
-		CreateImageView(m_AccumulationImage, m_AccumulationImage.ImageFormat, 1);
+		CreateImageView(m_AccumulationImage, VK_IMAGE_VIEW_TYPE_2D, m_AccumulationImage.ImageFormat, 1);
 	}
 
 	if (m_RenderSampler == VK_NULL_HANDLE) 
@@ -994,6 +1037,84 @@ void VulkanEngine::InitRenderTargets()
 		m_LDRImage.ImageView,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	)));
+}
+
+void VulkanEngine::InitLuts()
+{
+	VkExtent3D lutExtent = { 33, 33, 33 };
+
+	 
+	AllocatedImage cinematicLut = CreateImage(lutExtent, VK_IMAGE_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 1);
+	CreateImageView(cinematicLut, VK_IMAGE_VIEW_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, 1);
+
+	AllocatedImage dayNightLut = CreateImage(lutExtent, VK_IMAGE_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 1);
+	CreateImageView(dayNightLut, VK_IMAGE_VIEW_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, 1);
+
+	std::vector<float> cinematicLutData = LoadLUT(m_PathToLuts / "cinematic.cube");
+	std::vector<float> dayNightLutData = LoadLUT(m_PathToLuts / "day-night.cube");
+
+	size_t bufferSize = cinematicLutData.size() * sizeof(float);
+
+	AllocatedBuffer stagingBuffer = CreateBuffer(
+		bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VMA_MEMORY_USAGE_CPU_ONLY
+	);
+
+	void* data;
+	vkMapMemory(m_Device, stagingBuffer.Allocation->GetMemory(), 0, bufferSize, 0, &data);
+	memcpy(data, cinematicLutData.data(), bufferSize);
+	vkUnmapMemory(m_Device, stagingBuffer.Allocation->GetMemory());
+	vmaFlushAllocation(m_Allocator, stagingBuffer.Allocation, 0, bufferSize);
+
+	VkBufferImageCopy bufferImageCopy = {};
+	bufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	bufferImageCopy.imageSubresource.layerCount = 1;
+	bufferImageCopy.imageExtent = lutExtent;
+
+	VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkResetCommandBuffer(m_ImmediateCommandBuffer, 0);
+	vkBeginCommandBuffer(m_ImmediateCommandBuffer, &bi);
+
+	TransitionImage(m_ImmediateCommandBuffer, cinematicLut.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
+	vkCmdCopyBufferToImage(m_ImmediateCommandBuffer, stagingBuffer.Buffer, cinematicLut.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
+	TransitionImage(m_ImmediateCommandBuffer, cinematicLut.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
+
+	vkEndCommandBuffer(m_ImmediateCommandBuffer);
+	vkResetFences(m_Device, 1, &m_ImmediateFence);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_ImmediateCommandBuffer;
+
+	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
+	vkQueueWaitIdle(m_GraphicsQueue);
+
+	vkResetCommandBuffer(m_ImmediateCommandBuffer, 0);
+	vkBeginCommandBuffer(m_ImmediateCommandBuffer, &bi);
+
+	vkMapMemory(m_Device, stagingBuffer.Allocation->GetMemory(), 0, bufferSize, 0, &data);
+	memcpy(data, dayNightLutData.data(), bufferSize);
+	vkUnmapMemory(m_Device, stagingBuffer.Allocation->GetMemory());
+	vmaFlushAllocation(m_Allocator, stagingBuffer.Allocation, 0, bufferSize);
+
+	TransitionImage(m_ImmediateCommandBuffer, dayNightLut.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
+	vkCmdCopyBufferToImage(m_ImmediateCommandBuffer, stagingBuffer.Buffer, dayNightLut.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
+	TransitionImage(m_ImmediateCommandBuffer, dayNightLut.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
+
+	vkEndCommandBuffer(m_ImmediateCommandBuffer);
+	vkResetFences(m_Device, 1, &m_ImmediateFence);
+
+	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
+	vkQueueWaitIdle(m_GraphicsQueue);
+
+	vmaDestroyBuffer(m_Allocator, stagingBuffer.Buffer, stagingBuffer.Allocation);
+
+	m_Luts[LUTType::CINEMATIC] = std::move(cinematicLut);
+	m_Luts[LUTType::DAY_NIGHT] = std::move(dayNightLut);
 }
 
 void VulkanEngine::InitMitmapsResources()
@@ -1214,6 +1335,16 @@ void VulkanEngine::InitCommands()
 	});
 }
 
+void VulkanEngine::SwitchLuts(LUTType type)
+{
+	vkDeviceWaitIdle(m_Device);
+
+	Shader& colorGradingShader = m_Shaders[ShaderName::COLOR_GRADING];
+	colorGradingShader.Bindings[0] = DescriptorBinding(m_Luts.at(type), m_RenderSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+	UpdateDescriptorSets(colorGradingShader);
+}
+
 void VulkanEngine::InitSwapchain()
 {
 	if (m_Window)
@@ -1290,7 +1421,7 @@ void VulkanEngine::InitDevices()
 		});
 }
 
-AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, uint32_t mipLevels) const
+AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkImageType type, VkFormat format, VkImageUsageFlags usage, uint32_t mipLevels) const
 {
 	AllocatedImage newImage = {};
 	newImage.ImageFormat = format;
@@ -1298,7 +1429,7 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.imageType = type;
 	imageInfo.format = format;
 	imageInfo.extent = size;
 	imageInfo.mipLevels = mipLevels;
@@ -1326,12 +1457,12 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 }
 
 
-void VulkanEngine::CreateImageView(AllocatedImage& image, const VkFormat format, uint32_t mipLevels) const
+void VulkanEngine::CreateImageView(AllocatedImage& image, VkImageViewType type, const VkFormat format, uint32_t mipLevels) const
 {
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = image.Image;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.viewType = type;
 	viewInfo.format = format;
 	viewInfo.subresourceRange.baseMipLevel = 0;
 	viewInfo.subresourceRange.levelCount = mipLevels;
@@ -1506,6 +1637,12 @@ void VulkanEngine::Cleanup()
 		vkDestroyImageView(m_Device, m_LDRImage.ImageView, nullptr);
 		vkDestroyImageView(m_Device, m_HDRImage.ImageView, nullptr);
 		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
+
+		for(auto& [name, lut] : m_Luts)
+		{
+			vkDestroyImageView(m_Device, lut.ImageView, nullptr);
+			DestroyImage(lut);
+		}
 
 		for (auto& mipView : m_MipmapImageViews)
 		{

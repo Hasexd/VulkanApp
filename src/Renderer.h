@@ -52,8 +52,11 @@ public:
 	ImTextureID GetRenderTextureID() const { return m_Engine->GetRenderTextureID(); }
 
 	void SetBloomEnabled(bool enabled) { m_Engine->SetBloomEnabled(enabled); }
+	void SetColorGradingEnabled(bool enabled) { m_Engine->SetColorGradingEnabled(enabled); }
 
 	bool IsComplete() const { return m_AccumulationEnabled && m_SampleCount >= m_MaxSamples; }
+
+	void SwitchLuts(LUTType type) { m_Engine->SwitchLuts(type); }
 private:
 	void UpdateUniformBuffer(const std::shared_ptr<Scene>& scene) const;
 	void UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const;
