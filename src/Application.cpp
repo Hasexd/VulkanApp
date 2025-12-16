@@ -219,12 +219,12 @@ void Application::DrawImGui()
 				std::string selectedLut = lutOptions[currentLutIndex];
 				if (selectedLut == "NONE")
 				{
-					m_ColorGradingEnabled = false;
 					m_Renderer->SetColorGradingEnabled(false);
 				}
 				else
 				{
 					m_Renderer->SwitchLuts(StringToLutType(lutOptions[currentLutIndex]));
+					m_Renderer->SetColorGradingEnabled(true);
 				}
 			}
 		}

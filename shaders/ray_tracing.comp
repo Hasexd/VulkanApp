@@ -284,7 +284,7 @@ vec4 RayGen(vec2 coord, uint sampleCount)
 
                 float specularChance = mix(fresnel, 1.0, material.Metallic);
 
-                bool isSpecular = RandomFloat(seed) < specularChance;
+                bool isSpecular = bool(RandomFloat(seed) < specularChance);
 
                 vec3 newDirection;
 

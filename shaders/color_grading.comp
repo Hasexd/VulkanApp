@@ -2,7 +2,7 @@
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
-layout(binding = 0) uniform sampler3D lutSampler;
+layout(binding = 0) uniform sampler3D LUT;
 layout(binding = 1, rgba16f) uniform image2D HDRImage;
 
 void main()
@@ -18,8 +18,7 @@ void main()
     vec3 lutCoord = hdr / (hdr + 1.0);
     lutCoord = clamp(lutCoord, 0.0, 1.0);
 
-    vec3 graded = texture(lutSampler, lutCoord).rgb;
-
+    vec3 graded = texture(LUT, lutCoord).rgb;
     graded = graded / max(vec3(1e-4), (vec3(1.0) - graded));
 
     imageStore(HDRImage, pixel, vec4(graded, 1.0));
