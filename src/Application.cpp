@@ -290,15 +290,9 @@ void Application::HandleKeyboardInput(Camera& camera)
 	}
 
 	if (glfwGetKey(m_Window.get(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS &&
-		glfwGetKey(m_Window.get(), GLFW_KEY_R) == GLFW_PRESS &&
-		!m_ShaderReloadRequested)
+		glfwGetKey(m_Window.get(), GLFW_KEY_R) == GLFW_PRESS)
 	{
-		m_ShaderReloadRequested = true;
 		m_Renderer->ReloadShaders();
-	}
-	else
-	{
-		m_ShaderReloadRequested = false;
 	}
 
 	glm::vec3 movement(0.0f);

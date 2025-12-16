@@ -54,7 +54,6 @@ private:
 	bool m_QPressed = false;
 	bool m_EPressed = false;
 	bool m_ViewportHovered = false;
-	bool m_ShaderReloadRequested = false;
 
 	bool m_BloomEnabled = true;
 	bool m_ColorGradingEnabled = true;
