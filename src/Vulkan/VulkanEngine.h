@@ -74,6 +74,8 @@ private:
 	void InitMitmapsResources();
 	void InitLuts();
 
+	void CreateLUT(AllocatedImage& lutImage, const std::filesystem::path& pathToLut, LUTType type);
+
 	void RayTrace(VkCommandBuffer cmd, uint32_t gx, uint32_t gy);
 	void Upsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);
 	void Downsample(VkCommandBuffer cmd, VkImage image, int32_t width, int32_t height, uint32_t mipLevels);

@@ -22,7 +22,8 @@ enum class LUTType : uint8_t
 {
 	NONE,
 	CINEMATIC,
-	DAY_NIGHT
+	DAY_NIGHT,
+	CINEDRAMA
 };
 
 struct DeletionQueue

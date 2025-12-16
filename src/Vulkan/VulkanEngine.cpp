@@ -1043,17 +1043,25 @@ void VulkanEngine::InitLuts()
 {
 	VkExtent3D lutExtent = { 33, 33, 33 };
 
-	 
 	AllocatedImage cinematicLut = CreateImage(lutExtent, VK_IMAGE_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 1);
 	CreateImageView(cinematicLut, VK_IMAGE_VIEW_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, 1);
 
 	AllocatedImage dayNightLut = CreateImage(lutExtent, VK_IMAGE_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 1);
 	CreateImageView(dayNightLut, VK_IMAGE_VIEW_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, 1);
 
-	std::vector<float> cinematicLutData = LoadLUT(m_PathToLuts / "cinematic.cube");
-	std::vector<float> dayNightLutData = LoadLUT(m_PathToLuts / "day-night.cube");
+	AllocatedImage cineDramaLut = CreateImage(lutExtent, VK_IMAGE_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 1);
+	CreateImageView(cineDramaLut, VK_IMAGE_VIEW_TYPE_3D, VK_FORMAT_R32G32B32A32_SFLOAT, 1);
 
-	size_t bufferSize = cinematicLutData.size() * sizeof(float);
+	CreateLUT(cinematicLut, m_PathToLuts / "cinematic.cube", LUTType::CINEMATIC);
+	CreateLUT(dayNightLut, m_PathToLuts / "day-night.cube", LUTType::DAY_NIGHT);
+	CreateLUT(cineDramaLut, m_PathToLuts / "cinedrama.cube", LUTType::CINEDRAMA);
+}
+
+void VulkanEngine::CreateLUT(AllocatedImage& lutImage, const std::filesystem::path& pathToLut, LUTType type)
+{
+	std::vector<float> lutData = LoadLUT(pathToLut);
+
+	size_t bufferSize = lutData.size() * sizeof(float);
 
 	AllocatedBuffer stagingBuffer = CreateBuffer(
 		bufferSize,
@@ -1063,14 +1071,14 @@ void VulkanEngine::InitLuts()
 
 	void* data;
 	vkMapMemory(m_Device, stagingBuffer.Allocation->GetMemory(), 0, bufferSize, 0, &data);
-	memcpy(data, cinematicLutData.data(), bufferSize);
+	memcpy(data, lutData.data(), bufferSize);
 	vkUnmapMemory(m_Device, stagingBuffer.Allocation->GetMemory());
 	vmaFlushAllocation(m_Allocator, stagingBuffer.Allocation, 0, bufferSize);
 
 	VkBufferImageCopy bufferImageCopy = {};
 	bufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	bufferImageCopy.imageSubresource.layerCount = 1;
-	bufferImageCopy.imageExtent = lutExtent;
+	bufferImageCopy.imageExtent = {33, 33, 33};
 
 	VkCommandBufferBeginInfo bi{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -1078,9 +1086,9 @@ void VulkanEngine::InitLuts()
 	vkResetCommandBuffer(m_ImmediateCommandBuffer, 0);
 	vkBeginCommandBuffer(m_ImmediateCommandBuffer, &bi);
 
-	TransitionImage(m_ImmediateCommandBuffer, cinematicLut.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
-	vkCmdCopyBufferToImage(m_ImmediateCommandBuffer, stagingBuffer.Buffer, cinematicLut.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
-	TransitionImage(m_ImmediateCommandBuffer, cinematicLut.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
+	TransitionImage(m_ImmediateCommandBuffer, lutImage.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
+	vkCmdCopyBufferToImage(m_ImmediateCommandBuffer, stagingBuffer.Buffer, lutImage.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
+	TransitionImage(m_ImmediateCommandBuffer, lutImage.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
 
 	vkEndCommandBuffer(m_ImmediateCommandBuffer);
 	vkResetFences(m_Device, 1, &m_ImmediateFence);
@@ -1093,28 +1101,9 @@ void VulkanEngine::InitLuts()
 	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
 	vkQueueWaitIdle(m_GraphicsQueue);
 
-	vkResetCommandBuffer(m_ImmediateCommandBuffer, 0);
-	vkBeginCommandBuffer(m_ImmediateCommandBuffer, &bi);
-
-	vkMapMemory(m_Device, stagingBuffer.Allocation->GetMemory(), 0, bufferSize, 0, &data);
-	memcpy(data, dayNightLutData.data(), bufferSize);
-	vkUnmapMemory(m_Device, stagingBuffer.Allocation->GetMemory());
-	vmaFlushAllocation(m_Allocator, stagingBuffer.Allocation, 0, bufferSize);
-
-	TransitionImage(m_ImmediateCommandBuffer, dayNightLut.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
-	vkCmdCopyBufferToImage(m_ImmediateCommandBuffer, stagingBuffer.Buffer, dayNightLut.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
-	TransitionImage(m_ImmediateCommandBuffer, dayNightLut.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, 1);
-
-	vkEndCommandBuffer(m_ImmediateCommandBuffer);
-	vkResetFences(m_Device, 1, &m_ImmediateFence);
-
-	vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_ImmediateFence);
-	vkQueueWaitIdle(m_GraphicsQueue);
-
 	vmaDestroyBuffer(m_Allocator, stagingBuffer.Buffer, stagingBuffer.Allocation);
 
-	m_Luts[LUTType::CINEMATIC] = std::move(cinematicLut);
-	m_Luts[LUTType::DAY_NIGHT] = std::move(dayNightLut);
+	m_Luts[type] = lutImage;
 }
 
 void VulkanEngine::InitMitmapsResources()

@@ -11,10 +11,12 @@ namespace
 	{
 		if (string == "CINEMATIC")
 			return LUTType::CINEMATIC;
-		else if (string == "DAY - NIGHT")
+		if (string == "DAY - NIGHT")
 			return LUTType::DAY_NIGHT;
-		else
-			return LUTType::NONE;
+		if (string == "CINEDRAMA")
+			return LUTType::CINEDRAMA;
+
+		return LUTType::NONE;
 	}
 }
 
@@ -212,7 +214,7 @@ void Application::DrawImGui()
 
 		if (m_ColorGradingEnabled)
 		{
-			const char* lutOptions[] = { "NONE", "CINEMATIC", "DAY - NIGHT" };
+			const char* lutOptions[] = { "NONE", "CINEMATIC", "DAY - NIGHT", "CINEDRAMA" };
 			static int currentLutIndex = 1;
 			if (ImGui::Combo("LUTs", &currentLutIndex, lutOptions, IM_ARRAYSIZE(lutOptions)))
 			{
