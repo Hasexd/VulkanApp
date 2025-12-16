@@ -1,13 +1,18 @@
 #version 450
 #extension GL_KHR_vulkan_glsl : enable
+
 layout(local_size_x = 16, local_size_y = 16) in;
+
 layout(binding = 0) uniform sampler2D srcMip;
 layout(binding = 1, rgba16f) uniform writeonly image2D dstMip;
-layout(push_constant) uniform constants {
+
+layout(push_constant) uniform constants 
+{
     int IsBrightPass;
 } BrightPassConstants; 
 
-vec4 Downsample13Tap(sampler2D tex, vec2 uv, vec2 texelSize) {
+vec4 Downsample13Tap(sampler2D tex, vec2 uv, vec2 texelSize) 
+{
     vec4 a = texture(tex, uv + vec2(-1.0, -1.0) * texelSize);
     vec4 b = texture(tex, uv + vec2( 0.0, -1.0) * texelSize);
     vec4 c = texture(tex, uv + vec2( 1.0, -1.0) * texelSize);
@@ -33,11 +38,13 @@ vec4 Downsample13Tap(sampler2D tex, vec2 uv, vec2 texelSize) {
     return result * 0.25;
 }
 
-void main() {
+void main() 
+{
     ivec2 dstPos = ivec2(gl_GlobalInvocationID.xy);
     ivec2 dstSize = imageSize(dstMip);
     
-    if (dstPos.x >= dstSize.x || dstPos.y >= dstSize.y) {
+    if (dstPos.x >= dstSize.x || dstPos.y >= dstSize.y) 
+    {
         return;
     }
     
@@ -46,7 +53,8 @@ void main() {
     
     vec4 color = Downsample13Tap(srcMip, texCoord, texelSize);
     
-    if(BrightPassConstants.IsBrightPass == 1) {
+    if(BrightPassConstants.IsBrightPass == 1) 
+    {
         float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
         float threshold = 1.0;
         float softness = 0.5;
