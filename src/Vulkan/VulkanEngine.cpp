@@ -1061,9 +1061,9 @@ void VulkanEngine::CreateLUT(AllocatedImage& lutImage, const std::filesystem::pa
 {
 	std::vector<float> lutData = LoadLUT(pathToLut);
 
-	size_t bufferSize = lutData.size() * sizeof(float);
+	const size_t bufferSize = lutData.size() * sizeof(float);
 
-	AllocatedBuffer stagingBuffer = CreateBuffer(
+	const AllocatedBuffer stagingBuffer = CreateBuffer(
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VMA_MEMORY_USAGE_CPU_ONLY
@@ -1352,7 +1352,7 @@ void VulkanEngine::InitDevices()
 {
 	vkb::InstanceBuilder builder{};
 
-	auto instRet = builder.set_app_name("Vulkan App")
+	auto instRet = builder.set_app_name("Vulkan Ray Tracer")
 		.request_validation_layers(true)
 		.use_default_debug_messenger()
 		.require_api_version(1, 3, 2)
@@ -1376,7 +1376,6 @@ void VulkanEngine::InitDevices()
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing = true;
 	features12.hostQueryReset = true;
-
 
 	vkb::PhysicalDeviceSelector selector(vkbInstance);
 	vkb::PhysicalDevice physicalDevice =
@@ -1596,6 +1595,16 @@ void VulkanEngine::ResetAccumulation() const
 	vkWaitForFences(m_Device, 1, &m_ImmediateFence, VK_TRUE, UINT64_MAX);
 }
 
+void VulkanEngine::DestroySwapchain()
+{
+	vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
+	for (auto& swapchainImageView : m_SwapchainImageViews)
+	{
+		vkDestroyImageView(m_Device, swapchainImageView, nullptr);
+	}
+	m_SwapchainImageViews.clear();
+	m_SwapchainImages.clear();
+}
 
 void VulkanEngine::Cleanup()
 {
@@ -1627,13 +1636,13 @@ void VulkanEngine::Cleanup()
 		vkDestroyImageView(m_Device, m_HDRImage.ImageView, nullptr);
 		vkDestroyImageView(m_Device, m_AccumulationImage.ImageView, nullptr);
 
-		for(auto& [name, lut] : m_Luts)
+		for(auto& lut : m_Luts | std::views::values)
 		{
 			vkDestroyImageView(m_Device, lut.ImageView, nullptr);
 			DestroyImage(lut);
 		}
 
-		for (auto& mipView : m_MipmapImageViews)
+		for (const auto& mipView : m_MipmapImageViews)
 		{
 			vkDestroyImageView(m_Device, mipView, nullptr);
 		}
@@ -1668,15 +1677,4 @@ void VulkanEngine::Cleanup()
 		m_FileWatcher.Stop();
 		IsInitialized = false;
 	}
-}
-
-void VulkanEngine::DestroySwapchain()
-{
-	vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
-	for (auto& swapchainImageView : m_SwapchainImageViews)
-	{
-		vkDestroyImageView(m_Device, swapchainImageView, nullptr);
-	}
-	m_SwapchainImageViews.clear();
-	m_SwapchainImages.clear();
 }
