@@ -1,0 +1,140 @@
+{
+    "ActiveCameraIndex": 0,
+    "BackgroundColor": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.10000000149011612
+    ],
+    "Cameras": [
+        {
+            "FieldOfView": 90.0,
+            "Position": [
+                2.5730841159820557,
+                4.166293144226074,
+                -20.862567901611328
+            ],
+            "Rotation": [
+                26.599905014038086,
+                295.7998962402344
+            ]
+        }
+    ],
+    "Materials": [
+        {
+            "Color": [
+                0.8872548937797546,
+                0.8722882866859436,
+                0.37838810682296753
+            ],
+            "EmissionPower": 3.299999952316284,
+            "Metallic": 0.0,
+            "Roughness": 0.5,
+            "Specular": 0.5
+        },
+        {
+            "Color": [
+                0.5098038911819458,
+                0.33237215876579285,
+                0.33237215876579285
+            ],
+            "EmissionPower": 0.0,
+            "Metallic": 1.0,
+            "Roughness": 0.38999998569488525,
+            "Specular": 0.550000011920929
+        }
+    ],
+    "Planes": [
+        {
+            "Height": 10.0,
+            "MaterialIndex": 1,
+            "Name": "Floor",
+            "Position": [
+                0.0,
+                0.0,
+                -19.0
+            ],
+            "Rotation": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Width": 10.0
+        },
+        {
+            "Height": 10.0,
+            "MaterialIndex": 1,
+            "Name": "Wall1",
+            "Position": [
+                0.0,
+                5.0,
+                -19.0
+            ],
+            "Rotation": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Width": 10.0
+        },
+        {
+            "Height": 5.0,
+            "MaterialIndex": 1,
+            "Name": "Wall2",
+            "Position": [
+                5.0,
+                2.5,
+                -19.0
+            ],
+            "Rotation": [
+                90.0,
+                0.0,
+                90.0
+            ],
+            "Width": 10.0
+        },
+        {
+            "Height": 5.0,
+            "MaterialIndex": 1,
+            "Name": "Wall3",
+            "Position": [
+                -5.0,
+                2.5,
+                -19.0
+            ],
+            "Rotation": [
+                90.0,
+                0.0,
+                90.0
+            ],
+            "Width": 10.0
+        },
+        {
+            "Height": 5.0,
+            "MaterialIndex": 1,
+            "Name": "Wall4",
+            "Position": [
+                0.0,
+                2.5,
+                -24.0
+            ],
+            "Rotation": [
+                90.0,
+                0.0,
+                900.0
+            ],
+            "Width": 10.0
+        }
+    ],
+    "Spheres": [
+        {
+            "MaterialIndex": 0,
+            "Name": "Light",
+            "Position": [
+                0.5,
+                4.099999904632568,
+                -18.399999618530273
+            ],
+            "Radius": 1.0
+        }
+    ]
+}
