@@ -119,6 +119,8 @@ void Renderer::UpdatePlaneBuffer(const std::shared_ptr<Scene>& scene) const
 
 		pd.Position = plane.GetPosition();
 		pd.Normal = plane.GetNormal();
+		pd.Tangent = plane.GetTangent();
+		pd.Bitangent = plane.GetBitangent();
 		pd.Width = plane.GetWidth();
 		pd.Height = plane.GetHeight();
 		pd.MaterialIndex = plane.GetMaterialIndex();

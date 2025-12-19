@@ -199,7 +199,7 @@ void Application::DrawImGui()
 
 			if(ImGui::DragFloat3("Position", glm::value_ptr(plane.GetPosition()), 0.1f))
 				sceneChanged = true;
-			if (ImGui::DragFloat3("Normal", glm::value_ptr(plane.GetNormal()), 0.1f))
+			if (ImGui::DragFloat3("Rotation", glm::value_ptr(plane.GetRotation()), 0.1f))
 				sceneChanged = true;
 			if (ImGui::DragFloat("Width", &plane.GetWidth(), 0.1f))
 				sceneChanged = true;
@@ -569,10 +569,10 @@ void Application::LoadJSONScenes()
 					{
 						const std::string& name = jsonPlane["Name"];
 						const glm::vec3 position = { jsonPlane["Position"][0], jsonPlane["Position"][1], jsonPlane["Position"][2] };
-						const glm::vec3 normal = { jsonPlane["Normal"][0], jsonPlane["Normal"][1], jsonPlane["Normal"][2] };
+						const glm::vec3 rotation = { jsonPlane["Rotation"][0], jsonPlane["Rotation"][1], jsonPlane["Rotation"][2] };
 						const uint32_t materialIndex = jsonPlane["MaterialIndex"];
 
-						scene.GetPlanes().emplace_back(name, position, normal, jsonPlane["Width"], jsonPlane["Height"], materialIndex);
+						scene.GetPlanes().emplace_back(name, position, rotation, jsonPlane["Width"], jsonPlane["Height"], materialIndex);
 					}
 				}
 
@@ -644,11 +644,11 @@ void Application::SaveJSONScenes()
 		{
 			json planeJson;
 			glm::vec3 pos = plane.GetPosition();
-			glm::vec3 normal = plane.GetNormal();
+			glm::vec3 rotation = plane.GetRotation();
 
 			planeJson["Name"] = plane.GetName();
 			planeJson["Position"] = { pos.x, pos.y, pos.z };
-			planeJson["Normal"] = { normal.x, normal.y, normal.z };
+			planeJson["Rotation"] = {rotation.x, rotation.y, rotation.z};
 			planeJson["Width"] = plane.GetWidth();
 			planeJson["Height"] = plane.GetHeight();
 			planeJson["MaterialIndex"] = plane.GetMaterialIndex();

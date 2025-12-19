@@ -103,6 +103,8 @@ struct PlaneBufferData
 {
 	alignas(16) glm::vec3 Position;
 	alignas(16) glm::vec3 Normal;
+	alignas(16) glm::vec3 Tangent;
+	alignas(16) glm::vec3 Bitangent;
 	float Width;
 	float Height;
 	uint32_t MaterialIndex;
