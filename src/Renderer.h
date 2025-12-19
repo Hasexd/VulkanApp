@@ -61,6 +61,7 @@ private:
 	void UpdateUniformBuffer(const std::shared_ptr<Scene>& scene) const;
 	void UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const;
 	void UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const;
+	void UpdatePlaneBuffer(const std::shared_ptr<Scene>& scene) const;
 private:
 	std::unique_ptr<VulkanEngine> m_Engine;
 	uint32_t m_Width, m_Height;

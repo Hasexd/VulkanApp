@@ -588,6 +588,7 @@ void VulkanEngine::InitShaders()
 		DescriptorBinding(m_AccumulationImage),
 		DescriptorBinding(UniformBuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER),
 		DescriptorBinding(SphereBuffer),
+		DescriptorBinding(PlaneBuffer),
 		DescriptorBinding(MaterialBuffer)
 	};
 
@@ -949,6 +950,9 @@ void VulkanEngine::InitBuffers()
 
 	constexpr size_t maxMaterials = 50;
 	MaterialBuffer = CreateBuffer(maxMaterials * sizeof(MaterialBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	constexpr size_t maxPlanes = 50;
+	PlaneBuffer = CreateBuffer(maxPlanes * sizeof(PlaneBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 }
 
 void VulkanEngine::InitRenderTargets()
@@ -1631,6 +1635,8 @@ void VulkanEngine::Cleanup()
 		vmaDestroyBuffer(m_Allocator, UniformBuffer.Buffer, UniformBuffer.Allocation);
 		vmaDestroyBuffer(m_Allocator, SphereBuffer.Buffer, SphereBuffer.Allocation);
 		vmaDestroyBuffer(m_Allocator, MaterialBuffer.Buffer, MaterialBuffer.Allocation);
+		vmaDestroyBuffer(m_Allocator, PlaneBuffer.Buffer, PlaneBuffer.Allocation);
+
 
 		vkDestroyImageView(m_Device, m_LDRImage.ImageView, nullptr);
 		vkDestroyImageView(m_Device, m_HDRImage.ImageView, nullptr);

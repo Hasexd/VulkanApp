@@ -99,6 +99,15 @@ struct SphereBufferData
 	uint32_t MaterialIndex;
 };
 
+struct PlaneBufferData
+{
+	alignas(16) glm::vec3 Position;
+	alignas(16) glm::vec3 Normal;
+	float Width;
+	float Height;
+	uint32_t MaterialIndex;
+};
+
 struct MaterialBufferData
 {
 	alignas(16) glm::vec3 Color;

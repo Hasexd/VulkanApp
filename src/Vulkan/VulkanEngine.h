@@ -49,9 +49,11 @@ public:
 	void Cleanup();
 public:
 	bool IsInitialized = false;
+
 	AllocatedBuffer UniformBuffer;
 	AllocatedBuffer SphereBuffer;
 	AllocatedBuffer MaterialBuffer;
+	AllocatedBuffer PlaneBuffer;
 private:
 	[[nodiscard]] AllocatedImage CreateImage(VkExtent3D size, VkImageType type, VkFormat format, VkImageUsageFlags usage, uint32_t mipLevels) const;
 	[[nodiscard]] AllocatedBuffer CreateBuffer(size_t size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;

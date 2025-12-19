@@ -3,6 +3,7 @@
 #include "Sphere.h"
 #include "Material.h"
 #include "Camera.h"
+#include "Plane.h"
 
 #include <vector>
 
@@ -14,13 +15,13 @@ public:
 	std::vector<Sphere>& GetSpheres() { return m_Spheres; }
 	std::vector<Material>& GetMaterials() { return m_Materials; }
 	std::vector<Camera>& GetCameras() { return m_Cameras; }
+	std::vector<Plane>& GetPlanes() { return m_Planes; }
 
 	Camera& GetActiveCamera() { return m_Cameras[m_ActiveCameraIndex]; }
 	const Camera& GetActiveCamera() const { return m_Cameras[m_ActiveCameraIndex]; }
 
 	uint32_t GetActiveCameraIndex() const { return m_ActiveCameraIndex; }
 	void SetActiveCameraIndex(uint32_t index) { m_ActiveCameraIndex = index; }
-
 
 	void SwitchCamera(int direction)
 	{
@@ -39,6 +40,7 @@ public:
 
 private:
 	std::vector<Sphere> m_Spheres;
+	std::vector<Plane> m_Planes;
 	std::vector<Material> m_Materials;
 	std::vector<Camera> m_Cameras;
 

@@ -151,9 +151,21 @@ void Application::DrawImGui()
 			if(ImGui::Selectable(sphere.GetName().c_str(), false))
 			{
 				m_SelectedSphereIndex = static_cast<int>(i);
+				m_SelectedPlaneIndex = -1;
 			}
 
 		}
+
+		for(size_t i = 0; i < m_CurrentScene->GetPlanes().size(); i++)
+		{
+			Plane& plane = m_CurrentScene->GetPlanes()[i];
+			if(ImGui::Selectable(plane.GetName().c_str(), false))
+			{
+				m_SelectedPlaneIndex = static_cast<int>(i);
+				m_SelectedSphereIndex = -1;
+			}
+		}
+
 		ImGui::End();
 
 		ImGui::Begin("Object details");
@@ -173,6 +185,31 @@ void Application::DrawImGui()
 			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
 			if(ImGui::DragFloat("Metallic", &material.Metallic, 0.01f, 0.0f, 1.0f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Specular", &material.Specular, 0.01f, 0.0f, 1.0f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
+				sceneChanged = true;
+		}
+
+		if (m_SelectedPlaneIndex != -1 && !m_CurrentScene->GetPlanes().empty())
+		{
+			Plane& plane = m_CurrentScene->GetPlanes()[m_SelectedPlaneIndex];
+			Material& material = m_CurrentScene->GetMaterials()[plane.GetMaterialIndex()];
+
+			if(ImGui::DragFloat3("Position", glm::value_ptr(plane.GetPosition()), 0.1f))
+				sceneChanged = true;
+			if (ImGui::DragFloat3("Normal", glm::value_ptr(plane.GetNormal()), 0.1f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Width", &plane.GetWidth(), 0.1f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Height", &plane.GetHeight(), 0.1f))
+				sceneChanged = true;
+			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color)))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Metallic", &material.Metallic, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
 			if (ImGui::DragFloat("Specular", &material.Specular, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
@@ -490,6 +527,7 @@ void Application::LoadJSONScenes()
 				}
 
 				const auto& spheresJson = fileContents["Spheres"];
+				const auto& planesJson = fileContents["Planes"];
 				const auto& materialsJson = fileContents["Materials"];
 
 				if (materialsJson.type() == json::value_t::array)
@@ -523,6 +561,21 @@ void Application::LoadJSONScenes()
 						scene.GetSpheres().emplace_back(name, position, radius, materialIndex);
 					}
 				}
+
+				if (planesJson.type() == json::value_t::array)
+				{
+					scene.GetPlanes().reserve(planesJson.size());
+					for (const auto& jsonPlane : planesJson)
+					{
+						const std::string& name = jsonPlane["Name"];
+						const glm::vec3 position = { jsonPlane["Position"][0], jsonPlane["Position"][1], jsonPlane["Position"][2] };
+						const glm::vec3 normal = { jsonPlane["Normal"][0], jsonPlane["Normal"][1], jsonPlane["Normal"][2] };
+						const uint32_t materialIndex = jsonPlane["MaterialIndex"];
+
+						scene.GetPlanes().emplace_back(name, position, normal, jsonPlane["Width"], jsonPlane["Height"], materialIndex);
+					}
+				}
+
 				const glm::vec3 bgColor = {
 					fileContents["BackgroundColor"][0],
 					fileContents["BackgroundColor"][1],
@@ -584,6 +637,24 @@ void Application::SaveJSONScenes()
 			spheresJson.push_back(sphereJson);
 		}
 		sceneJson["Spheres"] = spheresJson;
+
+		json planesJson = json::array();
+
+		for (const auto& plane : scenePtr->GetPlanes())
+		{
+			json planeJson;
+			glm::vec3 pos = plane.GetPosition();
+			glm::vec3 normal = plane.GetNormal();
+
+			planeJson["Name"] = plane.GetName();
+			planeJson["Position"] = { pos.x, pos.y, pos.z };
+			planeJson["Normal"] = { normal.x, normal.y, normal.z };
+			planeJson["Width"] = plane.GetWidth();
+			planeJson["Height"] = plane.GetHeight();
+			planeJson["MaterialIndex"] = plane.GetMaterialIndex();
+			planesJson.push_back(planeJson);
+		}
+		sceneJson["Planes"] = planesJson;
 
 		for (const Camera& camera: scenePtr->GetCameras())
 		{

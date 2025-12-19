@@ -43,6 +43,7 @@ void Renderer::Render()
 	{
 		UpdateUniformBuffer(scene);
 		UpdateSphereBuffer(scene);
+		UpdatePlaneBuffer(scene);
 		UpdateMaterialBuffer(scene);
 
 		if (m_AccumulationEnabled)
@@ -101,6 +102,33 @@ void Renderer::UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const
 	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->SphereBuffer.Allocation, &data);
 	memcpy(data, gpuSpheres.data(), gpuSpheres.size() * sizeof(SphereBufferData));
 	vmaUnmapMemory(m_Engine->GetAllocator(), m_Engine->SphereBuffer.Allocation);
+}
+
+void Renderer::UpdatePlaneBuffer(const std::shared_ptr<Scene>& scene) const
+{
+	if (!scene)
+		return;
+
+	const auto& planes = scene->GetPlanes();
+	std::vector<PlaneBufferData> gpuPlanes;
+	gpuPlanes.reserve(planes.size());
+
+	for (const auto& plane : planes)
+	{
+		PlaneBufferData pd = {};
+
+		pd.Position = plane.GetPosition();
+		pd.Normal = plane.GetNormal();
+		pd.Width = plane.GetWidth();
+		pd.Height = plane.GetHeight();
+		pd.MaterialIndex = plane.GetMaterialIndex();
+		gpuPlanes.push_back(pd);
+	}
+
+	void* data;
+	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->PlaneBuffer.Allocation, &data);
+	memcpy(data, gpuPlanes.data(), gpuPlanes.size() * sizeof(PlaneBufferData));
+	vmaUnmapMemory(m_Engine->GetAllocator(), m_Engine->PlaneBuffer.Allocation);
 }
 
 void Renderer::UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const
