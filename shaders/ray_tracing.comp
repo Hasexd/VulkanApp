@@ -314,7 +314,7 @@ vec4 RayGen(vec2 coord, uint sampleCount)
                 else 
                 {
                     vec3 diffuseColor = material.Color * (1.0 - material.Metallic);
-                    throughput *= diffuseColor / max(1.0 - specularChance, 0.001);
+                    throughput *= (diffuseColor / PI) / max(1.0 - specularChance, 0.001);
                 }
 
 
