@@ -144,7 +144,7 @@ foreach(SHADER ${SHADER_SOURCES})
     list(APPEND SHADER_OUTPUTS ${SHADER_OUTPUT})
 endforeach()
 
-add_custom_target(Shaders ALL DEPENDS ${SHADER_OUTPUTS})
+add_custom_target(Shaders ALL DEPENDS ${SHADER_OUTPUTS} SOURCES ${SHADER_SOURCES})
 add_dependencies(VulkanRayTracer Shaders)
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT VulkanRayTracer)

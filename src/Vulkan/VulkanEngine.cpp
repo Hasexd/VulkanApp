@@ -221,6 +221,7 @@ void VulkanEngine::SetViewportSize(const uint32_t width, const uint32_t height)
 	m_ViewportHeight = height;
 
 	RecreateRenderTargets();
+	ResetAccumulation();
 }
 
 

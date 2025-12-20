@@ -240,7 +240,7 @@ vec4 RayGen(vec2 coord, uint sampleCount)
     for(uint rayNum = 0; rayNum < raysPerPixel; rayNum++)
     {
         vec2 jitter = vec2(RandomFloat(seed), RandomFloat(seed)) - 0.5;
-        vec2 jitteredCoord = coord + jitter / vec2(ubo.Width, ubo.Height);
+        vec2 jitteredCoord = coord + jitter * 2.0 / vec2(ubo.Width, ubo.Height);
 
         vec3 rayDirection = vec3(
             jitteredCoord.x * ubo.AspectRatio * scalar,
