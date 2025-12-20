@@ -21,6 +21,9 @@ public:
 	uint32_t GetActiveCameraIndex() const { return m_ActiveCameraIndex; }
 	void SetActiveCameraIndex(uint32_t index) { m_ActiveCameraIndex = index; }
 
+	void SetBgColor(const glm::vec3& bgColor) { m_BackgroundColor = bgColor; }
+	glm::vec3& GetBgColor() { return m_BackgroundColor; }
+
 
 	void SwitchCamera(int direction)
 	{
@@ -42,5 +45,6 @@ private:
 	std::vector<Material> m_Materials;
 	std::vector<Camera> m_Cameras;
 
+	glm::vec3 m_BackgroundColor = glm::vec3(0.0);
 	uint32_t m_ActiveCameraIndex = 0;
 };

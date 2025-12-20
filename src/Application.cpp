@@ -96,6 +96,7 @@ void Application::DrawImGui()
 				m_CurrentSceneName = name;
 				m_CurrentScene = scenePtr;
 				m_Renderer->SetScene(scenePtr);
+				m_Renderer->SetBgColor(scenePtr->GetBgColor());
 				m_Renderer->ResetAccumulation();
 			}
 		}
@@ -192,7 +193,7 @@ void Application::DrawImGui()
 		ImGui::Separator();
 		ImGui::Text("Render Settings");
 
-		if (ImGui::ColorEdit3("Background color", &m_Renderer->GetBgColorRef()[0]))
+		if (ImGui::ColorEdit3("Background color", glm::value_ptr(m_CurrentScene->GetBgColor())))
 			sceneChanged = true;
 
 		bool accumulationEnabled = m_Renderer->IsAccumulationEnabled();
@@ -523,13 +524,14 @@ void Application::LoadJSONScenes()
 						scene.GetSpheres().emplace_back(name, position, radius, materialIndex);
 					}
 				}
-				const glm::vec3 bgColor = {
+				const glm::vec3 bgColor = 
+				{
 					fileContents["BackgroundColor"][0],
 					fileContents["BackgroundColor"][1],
 					fileContents["BackgroundColor"][2]
 				};
 
-				m_Renderer->SetBgColor(bgColor);
+				scene.SetBgColor(bgColor);
 				m_Scenes[sceneName] = std::make_shared<Scene>(scene);
 				m_SceneFilePaths[sceneName] = file.path().string();
 
@@ -596,7 +598,7 @@ void Application::SaveJSONScenes()
 
 		sceneJson["ActiveCameraIndex"] = scenePtr->GetActiveCameraIndex();
 
-		glm::vec3& bgColor = m_Renderer->GetBgColorRef();
+		glm::vec3& bgColor = scenePtr->GetBgColor();
 		sceneJson["BackgroundColor"] = { bgColor.x, bgColor.y, bgColor.z };
 
 		std::ofstream outFile(filePath);

@@ -135,6 +135,39 @@ vec3 SampleGGX(vec3 normal, float roughness, inout uint seed)
     return normalize(tangent * h.x + bitangent * h.y + normal * h.z);
 }
 
+float DistributionGGX(vec3 N, vec3 H, float roughness)
+{
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+
+    float denom = (NdotH * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return a2 / max(denom, 0.0001);
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+
+    float denom = NdotV * (1.0 - k) + k;
+
+    return NdotV / max(denom, 0.0001);
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
 float FresnelSchlick(float cosTheta, float F0)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
@@ -144,6 +177,7 @@ vec3 FresnelSchlickVec3(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
+
 
 bool IntersectSphere(Ray ray, Sphere sphere, out vec3 outHitNear, out vec3 outHitFar) 
 {
@@ -306,15 +340,23 @@ vec4 RayGen(vec2 coord, uint sampleCount)
                 if(isSpecular)
                 {
                     vec3 h = normalize(viewDir + newDirection);
-                    float voh = max(dot(viewDir, h), 0.0);
-                    vec3 f = FresnelSchlickVec3(voh, f0);
 
-                    throughput *= f / max(specularChance, 0.001);
+                    float NdotL = max(dot(normal, newDirection), 0.0);
+                    float NdotV = max(dot(normal, viewDir), 0.0);
+                    float HdotV = max(dot(h, viewDir), 0.0);
+                    float NdotH = max(dot(normal, h), 0.0);
+
+                    float D = DistributionGGX(normal, h, material.Roughness);
+                    float G = GeometrySmith(normal, viewDir, newDirection, material.Roughness);
+                    vec3 F = FresnelSchlickVec3(HdotV, f0);
+
+                    vec3 specularBRDF = F * G * HdotV / max(NdotV * NdotH, 0.0001);
+                    throughput *= specularBRDF / max(specularChance, 0.001);
                 }
                 else 
                 {
                     vec3 diffuseColor = material.Color * (1.0 - material.Metallic);
-                    throughput *= (diffuseColor / PI) / max(1.0 - specularChance, 0.001);
+                    throughput *= diffuseColor / max(1.0 - specularChance, 0.001);
                 }
 
 
