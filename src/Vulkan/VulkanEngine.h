@@ -158,8 +158,8 @@ private:
 	std::vector<std::string> m_ChangedShaderFiles;
 	std::atomic<bool> m_ShadersNeedReload = false;
 
-	std::filesystem::path m_PathToShaders;
-	std::filesystem::path m_PathToLuts;
+	std::filesystem::path m_PathToShaders = std::filesystem::current_path().parent_path() / "shaders";
+	std::filesystem::path m_PathToLuts = std::filesystem::current_path().parent_path() / "luts";
 
 	bool m_BloomEnabled = true;
 	bool m_ColorGradingEnabled = true;

@@ -27,55 +27,12 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
 find_package(Vulkan REQUIRED)
 
-add_library(GLFW STATIC)
-target_sources(GLFW PRIVATE
-    vendor/glfw/src/context.c
-    vendor/glfw/src/init.c
-    vendor/glfw/src/input.c
-    vendor/glfw/src/monitor.c
-    vendor/glfw/src/vulkan.c
-    vendor/glfw/src/window.c
-    vendor/glfw/src/platform.c
-    vendor/glfw/src/null_init.c
-    vendor/glfw/src/null_joystick.c
-    vendor/glfw/src/null_monitor.c
-    vendor/glfw/src/null_window.c
-)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 
-if(WIN32)
-    target_sources(GLFW PRIVATE
-        vendor/glfw/src/win32_init.c
-        vendor/glfw/src/win32_joystick.c
-        vendor/glfw/src/win32_module.c
-        vendor/glfw/src/win32_monitor.c
-        vendor/glfw/src/win32_time.c
-        vendor/glfw/src/win32_thread.c
-        vendor/glfw/src/win32_window.c
-        vendor/glfw/src/wgl_context.c
-        vendor/glfw/src/egl_context.c
-        vendor/glfw/src/osmesa_context.c
-    )
-    target_compile_definitions(GLFW PRIVATE _GLFW_WIN32 _CRT_SECURE_NO_WARNINGS)
-elseif(UNIX AND NOT APPLE)
-    target_sources(GLFW PRIVATE
-        vendor/glfw/src/x11_init.c
-        vendor/glfw/src/x11_monitor.c
-        vendor/glfw/src/x11_window.c
-        vendor/glfw/src/xkb_unicode.c
-        vendor/glfw/src/posix_module.c
-        vendor/glfw/src/posix_time.c
-        vendor/glfw/src/posix_thread.c
-        vendor/glfw/src/posix_poll.c
-        vendor/glfw/src/glx_context.c
-        vendor/glfw/src/egl_context.c
-        vendor/glfw/src/osmesa_context.c
-        vendor/glfw/src/linux_joystick.c
-    )
-    target_compile_definitions(GLFW PRIVATE _GLFW_X11)
-    target_link_libraries(GLFW PRIVATE X11 Xrandr Xi Xcursor)
-endif()
-
-target_include_directories(GLFW PUBLIC vendor/glfw/include)
+add_subdirectory(vendor/glfw)
 
 add_library(vk-bootstrap STATIC)
 file(GLOB VK_BOOTSTRAP_SOURCES 
@@ -123,10 +80,14 @@ target_include_directories(VulkanRayTracer PRIVATE
 )
 
 target_link_libraries(VulkanRayTracer PRIVATE
-    GLFW
+    glfw
     ImGui
     vk-bootstrap
     ${Vulkan_LIBRARIES}
+)
+
+target_compile_definitions(VulkanRayTracer PRIVATE 
+    PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
 target_compile_options(VulkanRayTracer PRIVATE

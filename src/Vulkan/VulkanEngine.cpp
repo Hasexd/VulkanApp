@@ -109,17 +109,6 @@ namespace
 
 void VulkanEngine::Init(const std::shared_ptr<GLFWwindow>& window)
 {
-#ifdef _WIN32
-	m_PathToShaders = std::filesystem::current_path().parent_path().parent_path().parent_path().parent_path() / "shaders";
-#else
-	m_PathToShaders = std::filesystem::current_path().parent_path().parent_path() / "shaders";
-#endif
-
-#ifdef _WIN32
-	m_PathToLuts = std::filesystem::current_path().parent_path().parent_path().parent_path().parent_path() / "luts";
-#else
-	m_PathToLuts = std::filesystem::current_path().parent_path().parent_path() / "luts";
-#endif
 
 	m_Window = window;
 	m_FileWatcher = FileWatcher(m_PathToShaders, std::chrono::milliseconds(1500));

@@ -23,6 +23,9 @@ namespace
 Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized, const std::string& defaultScene) :
 	m_Window(nullptr, glfwDestroyWindow)
 {
+
+	std::filesystem::current_path(PROJECT_SOURCE_DIR);
+
 	Init(width, height, title, resizable, maximized);
 	LoadJSONScenes();
 
@@ -425,11 +428,8 @@ void Application::LoadJSONScenes()
 {
 	using json = nlohmann::json;
 
-#ifdef _WIN32
-	std::filesystem::path path = std::filesystem::current_path().parent_path().parent_path().parent_path().parent_path() / "scenes";
-#else
-	std::filesystem::path path = std::filesystem::current_path().parent_path().parent_path() / "scenes";
-#endif
+	std::filesystem::path path = std::filesystem::current_path().parent_path() / "scenes";
+
 	for (const auto& file : std::filesystem::directory_iterator(path))
 	{
 		if (file.path().extension().string() == ".json")
