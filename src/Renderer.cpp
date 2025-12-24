@@ -112,14 +112,15 @@ void Renderer::UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const
 	std::vector<MaterialBufferData> gpuMaterials;
 	gpuMaterials.reserve(materials.size());
 
-	for (const auto& material : materials) 
+	for (const auto& material : materials)
 	{
+		const auto& mt = material.MaterialPtr;
 		MaterialBufferData md = {};
-		md.Color = material.Color;
-		md.Roughness = material.Roughness;
-		md.Metallic = material.Metallic;
-		md.Specular = material.Specular;
-		md.EmissionPower = material.EmissionPower;
+		md.Color = mt->Color;
+		md.Roughness = mt->Roughness;
+		md.Metallic = mt->Metallic;
+		md.Specular = mt->Specular;
+		md.EmissionPower = mt->EmissionPower;
 		gpuMaterials.push_back(md);
 	}
 

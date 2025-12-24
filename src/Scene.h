@@ -6,13 +6,19 @@
 
 #include <vector>
 
+struct MaterialInfo
+{
+	std::string Name;
+	std::shared_ptr<Material> MaterialPtr;
+};
+
 class Scene
 {
 public:
 	Scene() = default;
 
 	std::vector<Sphere>& GetSpheres() { return m_Spheres; }
-	std::vector<Material>& GetMaterials() { return m_Materials; }
+	std::vector<MaterialInfo>& GetMaterials() { return m_Materials; }
 	std::vector<Camera>& GetCameras() { return m_Cameras; }
 
 	Camera& GetActiveCamera() { return m_Cameras[m_ActiveCameraIndex]; }
@@ -42,7 +48,7 @@ public:
 
 private:
 	std::vector<Sphere> m_Spheres;
-	std::vector<Material> m_Materials;
+	std::vector<MaterialInfo> m_Materials;
 	std::vector<Camera> m_Cameras;
 
 	glm::vec3 m_BackgroundColor = glm::vec3(0.0);

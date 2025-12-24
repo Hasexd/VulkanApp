@@ -20,6 +20,17 @@ namespace
 	}
 }
 
+namespace ImGui
+{
+	bool Combo(const char* label, int* current_item, const std::vector<std::string>& items, int height_in_items = -1)
+	{
+		return Combo(label, current_item, [](void* data, int idx, const char** out_text) {
+			const auto& vec = *static_cast<const std::vector<std::string>*>(data);
+			*out_text = vec[idx].c_str();
+			return true;
+		}, (void*)&items, items.size(), height_in_items);
+	}
+}
 Application::Application(uint32_t width, uint32_t height, const char* title, bool resizable, bool maximized, const std::string& defaultScene) :
 	m_Window(nullptr, glfwDestroyWindow)
 {
@@ -109,9 +120,9 @@ void Application::DrawImGui()
 		ImGui::PopStyleVar(2);
 	}
 
-	bool sceneChanged = false;
 	if (m_CurrentScene)
 	{
+		bool sceneChanged = false;
 		Camera& camera = m_CurrentScene->GetActiveCamera();
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -165,22 +176,36 @@ void Application::DrawImGui()
 		if (m_SelectedSphereIndex != -1 && !m_CurrentScene->GetSpheres().empty())
 		{
 			Sphere& sphere = m_CurrentScene->GetSpheres()[m_SelectedSphereIndex];
-			Material& material = m_CurrentScene->GetMaterials()[sphere.GetMaterialIndex()];
+			const auto& material = m_CurrentScene->GetMaterials().at(sphere.GetMaterialIndex()).MaterialPtr;
 
+			const std::vector<MaterialInfo>& materials = m_CurrentScene->GetMaterials();
+			std::vector<std::string> materialNames;
+			materialNames.reserve(materials.size());
+
+			for (const auto& [name, materialPtr] : materials)
+				materialNames.emplace_back(name);
+
+			int idx = static_cast<int>(sphere.GetMaterialIndex());
+
+			if (ImGui::Combo("Materials available", &idx, materialNames))
+			{
+				sphere.GetMaterialIndex() = static_cast<uint32_t>(idx);
+				sceneChanged = true;
+			}
 
 			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
 				sceneChanged = true;
 			if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
 				sceneChanged = true;
-			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color)))
+			if (ImGui::ColorEdit3("Color", glm::value_ptr(material->Color)))
 				sceneChanged = true;
-			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f))
+			if (ImGui::DragFloat("Roughness", &material->Roughness, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
-			if(ImGui::DragFloat("Metallic", &material.Metallic, 0.01f, 0.0f, 1.0f))
+			if(ImGui::DragFloat("Metallic", &material->Metallic, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
-			if (ImGui::DragFloat("Specular", &material.Specular, 0.01f, 0.0f, 1.0f))
+			if (ImGui::DragFloat("Specular", &material->Specular, 0.01f, 0.0f, 1.0f))
 				sceneChanged = true;
-			if (ImGui::DragFloat("Emission Power", &material.EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
+			if (ImGui::DragFloat("Emission Power", &material->EmissionPower, 0.05f, 0.0f, std::numeric_limits<float>::max()))
 				sceneChanged = true;
 		}
 
@@ -495,7 +520,7 @@ void Application::LoadJSONScenes()
 
 				if (materialsJson.type() == json::value_t::array)
 				{
-					scene.GetMaterials().reserve(materialsJson.size());
+					auto& materials = scene.GetMaterials();
 
 					for (const auto& jsonMaterial : materialsJson)
 					{
@@ -506,8 +531,9 @@ void Application::LoadJSONScenes()
 						const float metallic = jsonMaterial["Metallic"];
 						const float specular = jsonMaterial["Specular"];
 						const float emissionPower = jsonMaterial["EmissionPower"];
-						
-						scene.GetMaterials().emplace_back(color, roughness, metallic, specular, emissionPower);
+						const std::string& name = jsonMaterial["Name"];
+
+						materials.emplace_back(name, std::make_unique<Material>(color, roughness, metallic, specular, emissionPower));
 					}
 				}
 
@@ -557,16 +583,19 @@ void Application::SaveJSONScenes()
 		const std::string& filePath = pathIt->second;
 
 		json sceneJson;
-
 		json materialsJson = json::array();
-		for (const auto& material : scenePtr->GetMaterials())
+
+		for (const auto& materialInfo : scenePtr->GetMaterials())
 		{
 			json materialJson;
-			materialJson["Color"] = { material.Color.r, material.Color.g, material.Color.b };
-			materialJson["Roughness"] = material.Roughness;
-			materialJson["Metallic"] = material.Metallic;
-			materialJson["Specular"] = material.Specular;
-			materialJson["EmissionPower"] = material.EmissionPower;
+			const auto& material = materialInfo.MaterialPtr;
+
+			materialJson["Name"] = materialInfo.Name;
+			materialJson["Color"] = { material->Color.r, material->Color.g, material->Color.b };
+			materialJson["Roughness"] = material->Roughness;
+			materialJson["Metallic"] = material->Metallic;
+			materialJson["Specular"] = material->Specular;
+			materialJson["EmissionPower"] = material->EmissionPower;
 
 			materialsJson.push_back(materialJson);
 		}
@@ -601,8 +630,7 @@ void Application::SaveJSONScenes()
 		glm::vec3& bgColor = scenePtr->GetBgColor();
 		sceneJson["BackgroundColor"] = { bgColor.x, bgColor.y, bgColor.z };
 
-		std::ofstream outFile(filePath);
-		if (outFile.is_open())
+		if (std::ofstream outFile(filePath); outFile.is_open())
 		{
 			outFile << sceneJson.dump(4);
 			outFile.close();
