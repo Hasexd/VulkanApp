@@ -30,6 +30,8 @@ bin/
 *.a
 *.so
 *.dylib
+*.pc
+*.cmake
 
 # Logs
 *.log
