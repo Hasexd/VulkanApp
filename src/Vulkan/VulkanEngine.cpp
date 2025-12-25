@@ -1,7 +1,6 @@
 ﻿#include "VulkanEngine.h"
 
 #define VMA_IMPLEMENTATION
-#include <regex>
 #include <vk_mem_alloc.h>
 
 
