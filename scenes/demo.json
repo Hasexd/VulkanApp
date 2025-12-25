@@ -1,9 +1,9 @@
 {
     "ActiveCameraIndex": 0,
     "BackgroundColor": [
-        0.29423776268959045,
-        0.663952112197876,
-        0.7598038911819458
+        0.5085544586181641,
+        0.7009804248809814,
+        0.7009804248809814
     ],
     "Cameras": [
         {
@@ -42,7 +42,7 @@
             "Metallic": 0.0,
             "Name": "SphereMaterial",
             "Roughness": 0.0,
-            "Specular": 1.0
+            "Specular": 0.0
         },
         {
             "Color": [

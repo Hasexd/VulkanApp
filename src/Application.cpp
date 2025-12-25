@@ -185,18 +185,20 @@ void Application::DrawImGui()
 			for (const auto& [name, materialPtr] : materials)
 				materialNames.emplace_back(name);
 
-			int idx = static_cast<int>(sphere.GetMaterialIndex());
+			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
+				sceneChanged = true;
+			if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
+				sceneChanged = true;
 
-			if (ImGui::Combo("Materials available", &idx, materialNames))
+			ImGui::Separator();
+
+			int idx = static_cast<int>(sphere.GetMaterialIndex());
+			if (ImGui::Combo("Current material", &idx, materialNames))
 			{
 				sphere.GetMaterialIndex() = static_cast<uint32_t>(idx);
 				sceneChanged = true;
 			}
 
-			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.GetPosition()), 0.1f))
-				sceneChanged = true;
-			if (ImGui::DragFloat("Radius", &sphere.GetRadius(), 0.1f))
-				sceneChanged = true;
 			if (ImGui::ColorEdit3("Color", glm::value_ptr(material->Color)))
 				sceneChanged = true;
 			if (ImGui::DragFloat("Roughness", &material->Roughness, 0.01f, 0.0f, 1.0f))
@@ -219,7 +221,10 @@ void Application::DrawImGui()
 		ImGui::Text("Render Settings");
 
 		if (ImGui::ColorEdit3("Background color", glm::value_ptr(m_CurrentScene->GetBgColor())))
+		{
+			m_Renderer->SetBgColor(m_CurrentScene->GetBgColor());
 			sceneChanged = true;
+		}
 
 		bool accumulationEnabled = m_Renderer->IsAccumulationEnabled();
 		if (ImGui::Checkbox("Start Rendering", &accumulationEnabled))
