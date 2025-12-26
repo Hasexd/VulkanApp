@@ -157,9 +157,23 @@ void VulkanEngine::ReloadShaders()
 
 			const Shader& shader = m_Shaders.at(shaderName);
 			const auto& bindings = shader.Bindings;
+
 			shader.Destroy(m_Device);
 
-			CreateShader(shaderName, bindings, nullptr, std::format("{}/{}.spv", (m_PathToShaders / "compiled").string(), fileName));
+			if (shaderName == ShaderName::DOWNSAMPLE)
+			{
+				VkPushConstantRange brightPassPushConstant = {};
+				brightPassPushConstant.offset = 0;
+				brightPassPushConstant.size = sizeof(int);
+				brightPassPushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+				CreateShader(shaderName, bindings, &brightPassPushConstant, std::format("{}/{}.spv", (m_PathToShaders / "compiled").string(), fileName));
+			}
+			else
+			{
+				CreateShader(shaderName, bindings, nullptr, std::format("{}/{}.spv", (m_PathToShaders / "compiled").string(), fileName));
+			}
+
 			UpdateDescriptorSets(m_Shaders[shaderName]);
 		}
 		else
@@ -224,7 +238,7 @@ void VulkanEngine::SetViewportSize(const uint32_t width, const uint32_t height)
 }
 
 
-void VulkanEngine::DrawFrame(const glm::vec2& motionVector, const bool dispatchCompute)
+void VulkanEngine::DrawFrame(const bool dispatchCompute)
 {
 	FrameData& frame = GetCurrentFrame();
 	vkWaitForFences(m_Device, 1, &frame.RenderFence, VK_TRUE, UINT64_MAX);
@@ -557,8 +571,6 @@ void VulkanEngine::InitImGui()
 	initInfo.PipelineRenderingCreateInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
 	initInfo.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
 	initInfo.PipelineRenderingCreateInfo.pColorAttachmentFormats = &m_SwapchainImageFormat;
-
-
 	initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
 	ImGui_ImplVulkan_Init(&initInfo);

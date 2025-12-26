@@ -69,7 +69,7 @@ private:
 	std::weak_ptr<Scene> m_CurrentScene;
 
 	glm::vec3 m_BackgroundColor = { 0.5f, 0.7f, 1.0f };
-	uint32_t m_SampleCount = 0;
+	uint32_t m_SampleCount = 1;
 	uint32_t m_MaxRayBounces;
 	uint32_t m_MaxSamples;
 	bool m_AccumulationEnabled = false;

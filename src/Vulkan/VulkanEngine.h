@@ -31,7 +31,7 @@ public:
 	VulkanEngine() = default;
 
 	void Init(const std::shared_ptr<GLFWwindow>& window); 
-	void DrawFrame(const glm::vec2& motionVector, bool dispatchCompute = false);
+	void DrawFrame(bool dispatchCompute = false);
 	void OnWindowResize(uint32_t width, uint32_t height);
 	void SetViewportSize(uint32_t width, uint32_t height);
 	void ReloadShaders();

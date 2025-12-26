@@ -47,7 +47,7 @@ void main()
     {
         return;
     }
-    
+
     vec2 texCoord = (vec2(dstPos) + 0.5) / vec2(dstSize);
     vec2 texelSize = 1.0 / vec2(textureSize(srcMip, 0));
     

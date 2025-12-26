@@ -49,7 +49,7 @@ void Renderer::Render()
 			++m_SampleCount;
 	}
 
-	m_Engine->DrawFrame(glm::vec2(0.0f), m_DispatchCompute);
+	m_Engine->DrawFrame(m_DispatchCompute);
 }
 
 void Renderer::UpdateUniformBuffer(const std::shared_ptr<Scene>& scene) const
