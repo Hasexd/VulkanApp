@@ -131,8 +131,9 @@ void Application::DrawImGui()
 		ImGui::Begin("Viewport", nullptr,
 			ImGuiWindowFlags_NoScrollbar |
 			ImGuiWindowFlags_NoScrollWithMouse);
+		
 
-		const ImTextureID renderTexture = m_Renderer->GetRenderTextureID();
+		const ImTextureID& renderTexture = m_Renderer->GetRenderTextureID();
 
 		m_ViewportHovered = ImGui::IsWindowHovered();
 
@@ -429,7 +430,7 @@ void Application::Init(uint32_t width, uint32_t height, const char* title, bool 
 	m_Window = std::shared_ptr<GLFWwindow>(glfwCreateWindow(width, height, title, nullptr, nullptr), glfwDestroyWindow);
 	m_Width = width;
 	m_Height = height;
-
+	
 	m_Renderer = std::make_unique<Renderer>(m_Window, m_Width, m_Height);
 
 	glfwSetWindowUserPointer(m_Window.get(), this);

@@ -91,7 +91,6 @@ target_compile_definitions(VulkanRayTracer PRIVATE
 )
 
 target_compile_options(VulkanRayTracer PRIVATE
-        $<$<CONFIG:Debug>:-g>
         $<$<CONFIG:Release>:-O3>
 )
 

@@ -47,6 +47,7 @@ private:
 
 	double m_LastMouseX = 0.f;
 	double m_LastMouseY = 0.f;
+
 	bool m_FirstMouse = true;
 	bool m_CursorVisible = false;
 	bool m_EscapePressed = false;
