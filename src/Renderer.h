@@ -65,7 +65,6 @@ private:
 	std::unique_ptr<VulkanEngine> m_Engine;
 	uint32_t m_Width, m_Height;
 	float m_AspectRatio;
-
 	std::weak_ptr<Scene> m_CurrentScene;
 
 	glm::vec3 m_BackgroundColor = { 0.5f, 0.7f, 1.0f };

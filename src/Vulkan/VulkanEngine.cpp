@@ -948,7 +948,7 @@ void VulkanEngine::InitBuffers()
 	constexpr size_t maxSpheres = 100;
 	SphereBuffer = CreateBuffer(maxSpheres * sizeof(SphereBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-	constexpr size_t maxMaterials = 50;
+	constexpr size_t maxMaterials = 100;
 	MaterialBuffer = CreateBuffer(maxMaterials * sizeof(MaterialBufferData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 }
 

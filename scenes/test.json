@@ -1,0 +1,92 @@
+{
+    "ActiveCameraIndex": 0,
+    "BackgroundColor": [
+        0.5286428332328796,
+        0.833265483379364,
+        0.8627451062202454
+    ],
+    "Cameras": [
+        {
+            "FieldOfView": 90.0,
+            "Position": [
+                -15.545881271362305,
+                18.82240867614746,
+                -12.956926345825195
+            ],
+            "Rotation": [
+                21.60000991821289,
+                969.599365234375
+            ]
+        }
+    ],
+    "Materials": [
+        {
+            "Color": [
+                0.9019607901573181,
+                0.07958479970693588,
+                0.07958479970693588
+            ],
+            "EmissionPower": 0.0,
+            "Metallic": 0.44999998807907104,
+            "Name": "SphereMaterial",
+            "Roughness": 0.0,
+            "Specular": 0.0
+        },
+        {
+            "Color": [
+                0.2518170177936554,
+                0.23969146609306335,
+                0.6519607901573181
+            ],
+            "EmissionPower": 0.0,
+            "Metallic": 0.0,
+            "Name": "GroundMaterial",
+            "Roughness": 0.0,
+            "Specular": 0.0
+        },
+        {
+            "Color": [
+                0.9754902124404907,
+                0.7403374314308167,
+                0.2486543506383896
+            ],
+            "EmissionPower": 26.850000381469727,
+            "Metallic": 0.0,
+            "Name": "LightMaterial",
+            "Roughness": 1.0,
+            "Specular": 1.0
+        }
+    ],
+    "Spheres": [
+        {
+            "MaterialIndex": 0,
+            "Name": "Sphere",
+            "Position": [
+                2.5,
+                5.0,
+                1.5
+            ],
+            "Radius": 5.0
+        },
+        {
+            "MaterialIndex": 1,
+            "Name": "Ground",
+            "Position": [
+                0.0,
+                -150.0,
+                0.0
+            ],
+            "Radius": 150.0
+        },
+        {
+            "MaterialIndex": 2,
+            "Name": "Light",
+            "Position": [
+                -12.300000190734863,
+                30.0,
+                5.900000095367432
+            ],
+            "Radius": 6.0
+        }
+    ]
+}

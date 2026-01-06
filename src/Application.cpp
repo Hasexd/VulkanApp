@@ -46,6 +46,7 @@ Application::Application(uint32_t width, uint32_t height, const char* title, boo
 
 		if (it != m_Scenes.end() && it->second != nullptr)
 		{
+			m_CurrentSceneName = defaultScene;
 			m_CurrentScene = it->second;
 			m_Renderer->SetScene(it->second);
 		}
@@ -106,6 +107,7 @@ void Application::DrawImGui()
 			{
 				m_CurrentSceneName = name;
 				m_CurrentScene = scenePtr;
+
 				m_Renderer->SetScene(scenePtr);
 				m_Renderer->SetBgColor(scenePtr->GetBgColor());
 				m_Renderer->ResetAccumulation();
@@ -539,7 +541,7 @@ void Application::LoadJSONScenes()
 						const float emissionPower = jsonMaterial["EmissionPower"];
 						const std::string& name = jsonMaterial["Name"];
 
-						materials.emplace_back(name, std::make_unique<Material>(color, roughness, metallic, specular, emissionPower));
+						materials.emplace_back(name, std::make_shared<Material>(Material{ color, roughness, metallic, specular, emissionPower }));
 					}
 				}
 

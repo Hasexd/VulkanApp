@@ -1,6 +1,12 @@
 #include "Renderer.h"
 
 
+namespace
+{
+	constexpr size_t c_MaxSpheres = 100;
+	constexpr size_t c_MaxMaterials = 100;
+}
+
 Renderer::Renderer(const std::shared_ptr<GLFWwindow>& window, uint32_t width, uint32_t height) :
 	m_Width(width), m_Height(height), m_AspectRatio((float)m_Width / m_Height),
 	m_MaxSamples(250), m_MaxRayBounces(10)
@@ -85,9 +91,15 @@ void Renderer::UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const
 		return;
 
 	const auto& spheres = scene->GetSpheres();
+
+
+	void* data;
+	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->SphereBuffer.Allocation, &data);
+	constexpr size_t bufferSize = c_MaxSpheres * sizeof(SphereBufferData);
+	memset(data, 0, bufferSize);
+
 	std::vector<SphereBufferData> gpuSpheres;
 	gpuSpheres.reserve(spheres.size());
-
 	for (const auto& sphere : spheres) 
 	{
 		SphereBufferData sd = {};
@@ -97,8 +109,6 @@ void Renderer::UpdateSphereBuffer(const std::shared_ptr<Scene>& scene) const
 		gpuSpheres.push_back(sd);
 	}
 
-	void* data;
-	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->SphereBuffer.Allocation, &data);
 	memcpy(data, gpuSpheres.data(), gpuSpheres.size() * sizeof(SphereBufferData));
 	vmaUnmapMemory(m_Engine->GetAllocator(), m_Engine->SphereBuffer.Allocation);
 }
@@ -109,9 +119,14 @@ void Renderer::UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const
 		return;
 
 	const auto& materials = scene->GetMaterials();
+
+	void* data;
+	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->MaterialBuffer.Allocation, &data);
+	constexpr size_t bufferSize = c_MaxMaterials * sizeof(MaterialBufferData);
+	memset(data, 0, bufferSize);
+
 	std::vector<MaterialBufferData> gpuMaterials;
 	gpuMaterials.reserve(materials.size());
-
 	for (const auto& material : materials)
 	{
 		const auto& mt = material.MaterialPtr;
@@ -124,8 +139,6 @@ void Renderer::UpdateMaterialBuffer(const std::shared_ptr<Scene>& scene) const
 		gpuMaterials.push_back(md);
 	}
 
-	void* data;
-	vmaMapMemory(m_Engine->GetAllocator(), m_Engine->MaterialBuffer.Allocation, &data);
 	memcpy(data, gpuMaterials.data(), gpuMaterials.size() * sizeof(MaterialBufferData));
 	vmaUnmapMemory(m_Engine->GetAllocator(), m_Engine->MaterialBuffer.Allocation);
 }
