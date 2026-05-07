@@ -9,7 +9,7 @@ A GPU accelerated path tracer using the Vulkan API. Scenes are rendered via comp
 # Requirements
 - CMake 3.20+
 - C++23-capable compiler
-- Vulkan SDK with glslansValidator on PATH
+- Vulkan SDK with glslangValidator on PATH
 - GPU with Vulkan support
 
 # Build
