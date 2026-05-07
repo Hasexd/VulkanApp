@@ -1,6 +1,6 @@
 # PathTracer
 
-A path tracer build with Vulkan, written in C++23.
+A path tracer built with Vulkan, written in C++23.
 
 # Overview
 
