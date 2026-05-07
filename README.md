@@ -35,3 +35,9 @@ This prevents the user from accidentally moving or looking around while waiting 
 # Shader hot-reloading
 
 Modifying any of the shader files in the `/shaders` directory while the app is running will trigger the FileWatcher, printing the appropriate message in the console. Press `CTRL + R` to hot-reload all the changed shaders at once.
+
+# Gallery
+<img width="1916" height="1007" alt="image" src="https://github.com/user-attachments/assets/a2c830e1-e1ff-4216-bf1e-7a10605adfb0" />
+<img width="1917" height="1004" alt="image" src="https://github.com/user-attachments/assets/14b65b47-a12a-49d5-ba63-6e2b8960c46a" />
+
+
